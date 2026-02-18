@@ -1,6 +1,6 @@
 use phf::phf_map;
 
-use crate::operands::Reg;
+use crate::operands::{Label, Reg};
 use crate::tokens::{Opcode, Token};
 
 pub struct Lexer {
@@ -28,6 +28,24 @@ impl Lexer {
                     }
                     self.pos += 1;
                 }
+                ':' => {
+                    tokens.push(Token::Colon);
+                    self.pos += 1;
+                }
+                '.' => {
+                    let mut scanned = String::from(".");
+                    self.pos += 1;
+                    while !self.is_at_end() && self.current().is_alphanumeric() {
+                        scanned.push(self.current());
+                        self.pos += 1;
+                    }
+
+                    tokens.push(Token::Sublabel(Label(scanned)));
+                }
+                ',' => {
+                    tokens.push(Token::Comma);
+                    self.pos += 1;
+                }
                 '0'..='9' => {
                     let mut scanned = String::new();
                     while !self.is_at_end() && self.current().is_numeric() {
@@ -39,19 +57,16 @@ impl Lexer {
                 }
                 'a'..='z' => {
                     let mut scanned = String::new();
-                    while !(self.is_at_end()
-                        || self.current().is_whitespace()
-                        || self.current() == ',')
-                    {
+                    while !self.is_at_end() && self.current().is_alphanumeric() {
                         scanned.push(self.current());
                         self.pos += 1;
                     }
 
-                    tokens.push(
-                        *TOKENLOOKUP
-                            .get(&scanned)
-                            .unwrap_or_else(|| panic!("not recognized: {}", &scanned)),
-                    );
+                    if let Some(token) = TOKENLOOKUP.get(&scanned).cloned() {
+                        tokens.push(token);
+                    } else {
+                        tokens.push(Token::Label(Label(scanned)));
+                    }
                 }
                 _ => panic!("unknown character: {}", self.current()),
             }
@@ -72,17 +87,18 @@ impl Lexer {
     }
 
     fn skip_whitespace(&mut self) {
-        while !self.is_at_end() && (self.current().is_whitespace() || self.current() == ',') {
+        while !self.is_at_end() && self.current().is_whitespace() {
             self.pos += 1;
         }
     }
 }
 
-static TOKENLOOKUP: phf::Map<&str, Token> = phf_map! {
+pub static TOKENLOOKUP: phf::Map<&str, Token> = phf_map! {
     "mov" => Token::Opcode(Opcode::Mov),
     "add" => Token::Opcode(Opcode::Add),
     "sub" => Token::Opcode(Opcode::Sub),
     "xor" => Token::Opcode(Opcode::Xor),
+    "jmp" => Token::Opcode(Opcode::Jmp),
     "rax" => Token::Reg(Reg::Rax),
     "rbx" => Token::Reg(Reg::Rbx),
     "rcx" => Token::Reg(Reg::Rcx),
@@ -101,37 +117,34 @@ static TOKENLOOKUP: phf::Map<&str, Token> = phf_map! {
     "r15" => Token::Reg(Reg::R15),
 };
 
+#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::operands::Label;
+
+    fn lex(src: &str) -> Vec<Token> {
+        let lexer = Lexer::new(src);
+        lexer.lex()
+    }
 
     #[test]
-    fn test_number() {
+    fn number() {
         let src = "999";
-        let lexer = Lexer::new(src);
-        let out = lexer.lex();
-        let Token::Imm(num) = out[0] else {
-            panic!("was not an immediate");
-        };
-        assert_eq!(num, 999);
+        let out = lex(src);
+        assert_eq!(out[0], Token::Imm(999));
     }
 
     #[test]
     #[should_panic(expected = "number out of range")]
-    fn test_number_out_of_range() {
+    fn number_out_of_range() {
         let src = "9999999999999999999999999999999999999999999999";
-        let lexer = Lexer::new(src);
-        let out = lexer.lex();
-        let Token::Imm(num) = out[0] else {
-            panic!("was not an immediate");
-        };
-        assert_eq!(num, 999);
+        lex(src);
     }
 
     #[test]
-    fn test_valid_tokens() {
+    fn valid_tokens() {
         let src = "mov add sub xor rax rbx";
-        let lexer = Lexer::new(src);
-        let out = lexer.lex();
+        let out = lex(src);
         assert_eq!(
             out,
             vec![
@@ -146,45 +159,104 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not recognized: dafhskgh")]
-    fn test_invalid_token() {
-        let src = "dafhskgh";
-        let lexer = Lexer::new(src);
-        _ = lexer.lex();
-    }
-
-    #[test]
-    fn test_valid_instr() {
+    fn valid_instr() {
         let src = "mov rax, rbx";
-        let lexer = Lexer::new(src);
-        let out = lexer.lex();
+        let out = lex(src);
         assert_eq!(
             out,
             vec![
                 Token::Opcode(Opcode::Mov),
                 Token::Reg(Reg::Rax),
+                Token::Comma,
                 Token::Reg(Reg::Rbx)
             ]
         );
     }
 
     #[test]
-    fn test_valid_instrs() {
+    fn valid_instrs() {
         let src = "
     mov rax, rbx 
     xor rbx, rax
 ";
-        let lexer = Lexer::new(src);
-        let out = lexer.lex();
+        let out = lex(src);
         assert_eq!(
             out,
             vec![
                 Token::Opcode(Opcode::Mov),
                 Token::Reg(Reg::Rax),
+                Token::Comma,
                 Token::Reg(Reg::Rbx),
                 Token::Opcode(Opcode::Xor),
                 Token::Reg(Reg::Rbx),
+                Token::Comma,
                 Token::Reg(Reg::Rax)
+            ]
+        );
+    }
+
+    #[test]
+    fn label() {
+        let src = "
+        label:
+        xor rax, rax
+        .if:
+        add rax, 8
+        .:
+        jmp .
+    ";
+
+        let out = lex(src);
+        assert_eq!(
+            out,
+            vec![
+                Token::Label(Label("label".into())),
+                Token::Colon,
+                Token::Opcode(Opcode::Xor),
+                Token::Reg(Reg::Rax),
+                Token::Comma,
+                Token::Reg(Reg::Rax),
+                Token::Sublabel(Label(".if".into())),
+                Token::Colon,
+                Token::Opcode(Opcode::Add),
+                Token::Reg(Reg::Rax),
+                Token::Comma,
+                Token::Imm(8),
+                Token::Sublabel(Label(".".into())),
+                Token::Colon,
+                Token::Opcode(Opcode::Jmp),
+                Token::Sublabel(Label(".".into()))
+            ]
+        );
+    }
+
+    #[test]
+    fn label_with_number() {
+        let src = "
+    label1:
+";
+        let out = lex(src);
+        assert_eq!(
+            out,
+            vec![Token::Label(Label("label1".into())), Token::Colon]
+        );
+    }
+
+    #[test]
+    fn jmp() {
+        let src = "
+    jmp label
+    jmp .label
+    ";
+
+        let out = lex(src);
+        assert_eq!(
+            out,
+            vec![
+                Token::Opcode(Opcode::Jmp),
+                Token::Label(Label("label".into())),
+                Token::Opcode(Opcode::Jmp),
+                Token::Sublabel(Label(".label".into()))
             ]
         );
     }

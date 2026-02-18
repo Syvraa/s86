@@ -1,5 +1,6 @@
 use crate::{
     instruction::Instr,
+    label_parser::{LabelParser, fix_opcode_label_definitions},
     lexer::Lexer,
     operands::{Imm32, Imm64, Reg, RegOrImm32, RegOrImm64},
     parser::Parser,
@@ -15,12 +16,14 @@ pub struct Simulator {
 impl Simulator {
     #[must_use]
     pub fn new(source: &str) -> Self {
-        let tokens = Lexer::new(source).lex();
-        let instrs = Parser::new(tokens.iter()).parse();
+        let mut tokens = Lexer::new(source).lex();
+        fix_opcode_label_definitions(&mut tokens);
+        let labels = LabelParser::new(tokens.iter()).parse();
+        let parsed = Parser::new(tokens.iter(), labels).parse();
 
         Self {
             registers: Registers::default(),
-            instrs,
+            instrs: parsed,
             curr_instr: 0,
         }
     }
@@ -32,14 +35,25 @@ impl Simulator {
     }
 
     pub fn step(&mut self) {
-        match self.instrs[self.curr_instr] {
-            Instr::Mov { dest, src } => self.do_mov(dest, src),
-            Instr::Add { dest, src } => self.do_add(dest, src),
-            Instr::Sub { dest, src } => self.do_sub(dest, src),
-            Instr::Xor { dest, src } => self.do_xor(dest, src),
-            _ => todo!(),
+        if self.curr_instr >= self.instrs.len() {
+            return;
         }
-        self.curr_instr += 1;
+
+        // Needed, otherwise we would not execute the instruction we branched to.
+        let mut branched = false;
+        match &self.instrs[self.curr_instr] {
+            Instr::Mov { dest, src } => self.do_mov(*dest, *src),
+            Instr::Add { dest, src } | Instr::Sub { dest, src } | Instr::Xor { dest, src } => {
+                self.do_binary_op(*dest, *src);
+            }
+            Instr::Jmp { dest } => {
+                self.curr_instr = *dest;
+                branched = true;
+            }
+        }
+        if !branched {
+            self.curr_instr += 1;
+        }
     }
 
     pub fn reset(&mut self) {
@@ -63,42 +77,26 @@ impl Simulator {
         }
     }
 
-    fn do_add(&mut self, dest: Reg, src: RegOrImm32) {
+    fn do_binary_op(&mut self, dest: Reg, src: RegOrImm32) {
         let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
         let rhs = match src {
             RegOrImm32::Imm(Imm32(val)) => u64::from(val),
             RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
         };
 
-        let result = lhs + rhs;
+        let result = match *self.current_instr() {
+            Instr::Add { .. } => lhs + rhs,
+            Instr::Sub { .. } => lhs - rhs,
+            Instr::Xor { .. } => lhs ^ rhs,
+            _ => unreachable!("if you got this, you forgot to add a case"),
+        };
         self.registers
             .get_mut_reg(dest)
             .copy_from_slice(&result.to_ne_bytes());
     }
 
-    fn do_sub(&mut self, dest: Reg, src: RegOrImm32) {
-        let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
-        let rhs = match src {
-            RegOrImm32::Imm(Imm32(val)) => u64::from(val),
-            RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
-        };
-
-        let result = lhs - rhs;
-        self.registers
-            .get_mut_reg(dest)
-            .copy_from_slice(&result.to_ne_bytes());
-    }
-
-    fn do_xor(&mut self, dest: Reg, src: RegOrImm32) {
-        let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
-        let rhs = match src {
-            RegOrImm32::Imm(Imm32(val)) => u64::from(val),
-            RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
-        };
-
-        let result = lhs ^ rhs;
-        self.registers
-            .get_mut_reg(dest)
-            .copy_from_slice(&result.to_ne_bytes());
+    #[must_use]
+    pub fn current_instr(&self) -> &'_ Instr {
+        &self.instrs[self.curr_instr]
     }
 }

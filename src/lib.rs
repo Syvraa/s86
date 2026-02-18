@@ -1,6 +1,7 @@
 #![deny(clippy::pedantic)]
 
 mod instruction;
+mod label_parser;
 mod lexer;
 mod operands;
 mod parser;

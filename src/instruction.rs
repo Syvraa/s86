@@ -6,4 +6,5 @@ pub enum Instr {
     Add { dest: Reg, src: RegOrImm32 },
     Sub { dest: Reg, src: RegOrImm32 },
     Xor { dest: Reg, src: RegOrImm32 },
+    Jmp { dest: usize },
 }
