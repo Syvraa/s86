@@ -2,7 +2,7 @@ use crate::{
     instruction::Instr,
     label_parser::{LabelParser, fix_opcode_label_definitions},
     lexer::Lexer,
-    operands::{Imm32, Imm64, Reg, RegOrImm32, RegOrImm64},
+    operands::{Imm64, Reg, RegOrImm32, RegOrImm64},
     parser::Parser,
     registers::Registers,
 };
@@ -80,13 +80,13 @@ impl Simulator {
     fn do_binary_op(&mut self, dest: Reg, src: RegOrImm32) {
         let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
         let rhs = match src {
-            RegOrImm32::Imm(Imm32(val)) => u64::from(val),
+            RegOrImm32::Imm(imm) => u64::from(imm),
             RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
         };
 
         let result = match *self.current_instr() {
-            Instr::Add { .. } => lhs + rhs,
-            Instr::Sub { .. } => lhs - rhs,
+            Instr::Add { .. } => lhs.overflowing_add(rhs).0,
+            Instr::Sub { .. } => lhs.overflowing_sub(rhs).0,
             Instr::Xor { .. } => lhs ^ rhs,
             _ => unreachable!("if you got this, you forgot to add a case"),
         };

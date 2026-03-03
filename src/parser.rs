@@ -114,7 +114,7 @@ mod tests {
     use crate::instruction::Instr;
     use crate::label_parser::{LabelParser, fix_opcode_label_definitions};
     use crate::lexer::Lexer;
-    use crate::operands::{Imm32, Reg};
+    use crate::operands::{Imm32, Imm64, Reg};
 
     struct ParseResult {
         instrs: Vec<Instr>,
@@ -224,5 +224,21 @@ mod tests {
 ";
 
         let _ = parse(source);
+    }
+
+    #[test]
+    fn negative_number() {
+        let source = "
+    mov rax, -100
+";
+
+        let parsed = parse(source);
+        assert_eq!(
+            parsed.instrs,
+            vec![Instr::Mov {
+                dest: Reg::Rax,
+                src: RegOrImm64::Imm(Imm64((-100_i64).cast_unsigned()))
+            }]
+        );
     }
 }
