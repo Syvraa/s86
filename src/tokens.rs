@@ -25,7 +25,7 @@ impl Opcode {
 pub enum Token {
     Opcode(Opcode),
     Reg(Reg),
-    Imm(u64),
+    Imm(i128),
     Label(Label),
     Sublabel(Label),
     Colon,

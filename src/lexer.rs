@@ -46,14 +46,21 @@ impl Lexer {
                     tokens.push(Token::Comma);
                     self.pos += 1;
                 }
-                '0'..='9' => {
+                '0'..='9' | '-' => {
+                    let mut positive = true;
+                    while !self.is_at_end() && self.current() == '-' {
+                        positive = !positive;
+                        self.pos += 1;
+                    }
+
                     let mut scanned = String::new();
                     while !self.is_at_end() && self.current().is_numeric() {
                         scanned.push(self.current());
                         self.pos += 1;
                     }
 
-                    tokens.push(Token::Imm(scanned.parse().expect("number out of range")));
+                    let number = scanned.parse().expect("number out of range");
+                    tokens.push(Token::Imm(if positive { number } else { -number }));
                 }
                 'a'..='z' => {
                     let mut scanned = String::new();
@@ -259,5 +266,26 @@ mod tests {
                 Token::Sublabel(Label(".label".into()))
             ]
         );
+    }
+
+    #[test]
+    fn negative_number() {
+        let src = "-100 --100 ---100
+";
+
+        let out = lex(src);
+        assert_eq!(
+            out,
+            vec![Token::Imm(-100), Token::Imm(100), Token::Imm(-100)]
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "number out of range")]
+    fn naked_negations() {
+        let src = "- --100 ---100
+";
+
+        let _ = lex(src);
     }
 }
