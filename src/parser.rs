@@ -207,5 +207,22 @@ mod tests {
     }
 
     #[test]
-    fn jmp_invalid() {}
+    #[should_panic(expected = "no label label found")]
+    fn jmp_not_exists() {
+        let source = "
+    jmp label
+";
+
+        let _ = parse(source);
+    }
+
+    #[test]
+    #[should_panic(expected = "not a valid label name")]
+    fn jmp_invalid_operand() {
+        let source = "
+    jmp 2dfa
+";
+
+        let _ = parse(source);
+    }
 }
