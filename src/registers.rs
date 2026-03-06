@@ -1,3 +1,5 @@
+use bitfield::bitfield;
+
 use crate::operands::Reg;
 
 #[derive(Default)]
@@ -18,6 +20,7 @@ pub struct Registers {
     pub r13: [u8; 8],
     pub r14: [u8; 8],
     pub r15: [u8; 8],
+    pub(crate) flags: Flags,
 }
 
 impl<'a> Registers {
@@ -41,5 +44,38 @@ impl<'a> Registers {
             R::R14 => &mut self.r14,
             R::R15 => &mut self.r15,
         }
+    }
+
+    pub fn flags(&self) -> &Flags {
+        &self.flags
+    }
+}
+
+bitfield! {
+    pub struct Flags(u64);
+    bool;
+    pub cf, set_cf: 0;
+    pub zf, set_zf: 6;
+    pub sf, set_sf: 7;
+    pub of, set_of: 11;
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        // Bit 2 is always set in RFLAGS.
+        Self(2)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flags() {
+        let mut regs = Registers::default();
+        assert_eq!(regs.flags().0, 2);
+        regs.flags.set_zf(true);
+        assert_eq!(regs.flags().0, 66);
     }
 }

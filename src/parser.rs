@@ -49,8 +49,48 @@ impl<'a> Parser<'a> {
         type O = Opcode;
         match op {
             O::Mov => self.parse_mov(),
-            O::Add | O::Sub | O::Xor => self.parse_binary_op(op),
+            O::Add | O::Sub | O::Xor | O::Cmp => self.parse_binary_op(op),
             O::Jmp => self.parse_jmp(),
+            O::Je | O::Jz => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Je { dest });
+            }
+            O::Jne | O::Jnz => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jne { dest });
+            }
+            O::Ja | O::Jnbe => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Ja { dest });
+            }
+            O::Jae | O::Jnb => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jae { dest });
+            }
+            O::Jb | O::Jnae => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jb { dest });
+            }
+            O::Jbe | O::Jna => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jbe { dest });
+            }
+            O::Jg | O::Jnle => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jg { dest });
+            }
+            O::Jge | O::Jnl => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jge { dest });
+            }
+            O::Jl | O::Jnge => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jl { dest });
+            }
+            O::Jle | O::Jng => {
+                let dest = self.get_instr_idx();
+                self.instrs.push(Instr::Jle { dest });
+            }
         }
     }
 
@@ -67,6 +107,41 @@ impl<'a> Parser<'a> {
         };
 
         self.instrs.push(Instr::Jmp { dest: instr_idx });
+    }
+
+    fn get_instr_idx(&mut self) -> usize {
+        let label = match self.next().expect("expected label name") {
+            Token::Opcode(op) => op.as_str(),
+            Token::Label(Label(name)) => name,
+            Token::Sublabel(Label(name)) => &(self.parent_label.0.clone() + name),
+            _ => panic!("not a valid label name"),
+        };
+
+        let Some(instr_idx) = self.labels.get(&Label(label.to_string())).copied() else {
+            panic!("no label {label} found");
+        };
+
+        instr_idx
+    }
+
+    fn parse_branch(&mut self, op: Opcode) {
+        type O = Opcode;
+        let dest = self.get_instr_idx();
+        let instr = match op {
+            O::Je | O::Jz => Instr::Je { dest },
+            O::Jne | O::Jnz => Instr::Jne { dest },
+            O::Ja | O::Jnbe => Instr::Ja { dest },
+            O::Jae | O::Jnb => Instr::Jae { dest },
+            O::Jb | O::Jnae => Instr::Jb { dest },
+            O::Jbe | O::Jna => Instr::Jbe { dest },
+            O::Jg | O::Jnle => Instr::Jg { dest },
+            O::Jge | O::Jnl => Instr::Jge { dest },
+            O::Jl | O::Jnge => Instr::Jl { dest },
+            O::Jle | O::Jng => Instr::Jle { dest },
+            _ => unreachable!("you forgot to add a case in parse_opcode"),
+        };
+
+        self.instrs.push(instr);
     }
 
     fn parse_mov(&mut self) {
@@ -93,6 +168,7 @@ impl<'a> Parser<'a> {
             O::Add => Instr::Add { dest, src },
             O::Sub => Instr::Sub { dest, src },
             O::Xor => Instr::Xor { dest, src },
+            O::Cmp => Instr::Cmp { dest, src },
             _ => unreachable!("you forgot to add a case in parse_opcode"),
         };
 
