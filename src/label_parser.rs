@@ -150,7 +150,6 @@ mod tests {
 
         let mut tokens = Lexer::new(src).lex();
         fix_opcode_label_definitions(&mut tokens);
-        println!("{tokens:?}");
         let result = LabelParser::new(tokens.iter()).parse();
         let mut expected = HashMap::new();
         expected.insert(Label("label".into()), 0);
@@ -172,5 +171,19 @@ mod tests {
         let mut tokens = Lexer::new(src).lex();
         fix_opcode_label_definitions(&mut tokens);
         _ = LabelParser::new(tokens.iter()).parse();
+    }
+
+    #[test]
+    fn single_sublabel() {
+        let src = "
+    .label:
+";
+
+        let mut tokens = Lexer::new(src).lex();
+        fix_opcode_label_definitions(&mut tokens);
+        let result = LabelParser::new(tokens.iter()).parse();
+        let mut expected = HashMap::new();
+        expected.insert(Label(".label".into()), 0);
+        assert_eq!(expected, result);
     }
 }
