@@ -35,6 +35,8 @@ impl Lexer {
                 '.' => {
                     let mut scanned = String::from(".");
                     self.pos += 1;
+                    assert!(self.current() != '.', "invalid sublabel name");
+
                     while !self.is_at_end() && self.current().is_alphanumeric() {
                         scanned.push(self.current());
                         self.pos += 1;
@@ -305,6 +307,14 @@ mod tests {
     fn naked_negations() {
         let src = "- --100 ---100
 ";
+
+        let _ = lex(src);
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid sublabel name")]
+    fn invalid_sublabel() {
+        let src = "..label:";
 
         let _ = lex(src);
     }

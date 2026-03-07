@@ -317,4 +317,13 @@ mod tests {
             }]
         );
     }
+
+    #[test]
+    #[should_panic(expected = "unexpected token")]
+    fn double_colon_label() {
+        let source = "
+    label::
+";
+        let _ = parse(source);
+    }
 }
