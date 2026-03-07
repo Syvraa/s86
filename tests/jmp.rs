@@ -22,9 +22,9 @@ fn jmp() {
     mov rax, 9
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_ne_bytes(10);
+    simulator.registers.rax = 10;
     simulator.run();
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rax), expected);
+    assert_eq!(simulator.registers.rax, expected);
 }
 
 #[test]
@@ -38,5 +38,5 @@ fn jmp_sublabel() {
 ";
     let mut simulator = Simulator::new(source);
     simulator.run();
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rax), 9);
+    assert_eq!(simulator.registers.rax, 9);
 }

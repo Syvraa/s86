@@ -14,7 +14,7 @@ fn mov_single() {
 ";
     let mut simulator = Simulator::new(source);
     simulator.run();
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rax), expected);
+    assert_eq!(simulator.registers.rax, expected);
 }
 
 #[test]
@@ -33,5 +33,5 @@ fn mov_reg() {
     let mut simulator = Simulator::new(source);
     simulator.run();
 
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rcx), expected);
+    assert_eq!(simulator.registers.rcx, expected);
 }

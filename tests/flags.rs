@@ -18,7 +18,7 @@ fn add_max() {
     add rax, 1
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_le_bytes(input);
+    simulator.registers.rax = input;
     simulator.run();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
@@ -39,7 +39,7 @@ fn sub_max() {
     sub rax, 1
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_le_bytes(input);
+    simulator.registers.rax = input;
     simulator.run();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
@@ -60,7 +60,7 @@ fn add_min() {
     add rax, 1
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_le_bytes(input);
+    simulator.registers.rax = input;
     simulator.run();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
@@ -81,7 +81,7 @@ fn sub_min() {
     sub rax, 1
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_le_bytes(input);
+    simulator.registers.rax = input;
     simulator.run();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }

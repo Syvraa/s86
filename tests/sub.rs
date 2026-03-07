@@ -13,9 +13,9 @@ fn add_single() {
     sub rax, 8
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_ne_bytes(8);
+    simulator.registers.rax = 8;
     simulator.run();
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rax), expected);
+    assert_eq!(simulator.registers.rax, expected);
 }
 
 #[test]
@@ -30,9 +30,9 @@ fn add_reg() {
     sub rcx, rax
 ";
     let mut simulator = Simulator::new(source);
-    simulator.registers.rax = u64::to_ne_bytes(8);
-    simulator.registers.rcx = u64::to_ne_bytes(8);
+    simulator.registers.rax = 8;
+    simulator.registers.rcx = 8;
     simulator.run();
 
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rcx), expected);
+    assert_eq!(simulator.registers.rcx, expected);
 }

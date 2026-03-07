@@ -24,7 +24,7 @@ fn je() {
 ";
     let mut simulator = Simulator::new(source);
     simulator.run();
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rax), expected);
+    assert_eq!(simulator.registers.rax, expected);
 }
 
 #[test]
@@ -49,5 +49,5 @@ fn ja() {
 ";
     let mut simulator = Simulator::new(source);
     simulator.run();
-    assert_eq!(u64::from_ne_bytes(simulator.registers.rax), expected);
+    assert_eq!(simulator.registers.rax, expected);
 }

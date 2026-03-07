@@ -4,7 +4,7 @@ use s86::Simulator;
 
 #[test]
 fn mov_negative() {
-    let expected: i64;
+    let expected: u64;
     unsafe {
         asm!("mov rax, -8", out("rax") expected);
     }
@@ -14,12 +14,12 @@ fn mov_negative() {
 ";
     let mut simulator = Simulator::new(source);
     simulator.run();
-    assert_eq!(i64::from_le_bytes(simulator.registers.rax), expected);
+    assert_eq!(simulator.registers.rax, expected);
 }
 
 #[test]
 fn add_negative() {
-    let mut expected: i64;
+    let mut expected: u64;
 
     unsafe {
         asm!(
@@ -36,5 +36,5 @@ fn add_negative() {
     let mut simulator = Simulator::new(source);
     simulator.run();
 
-    assert_eq!(i64::from_le_bytes(simulator.registers.rcx), expected);
+    assert_eq!(simulator.registers.rcx, expected);
 }

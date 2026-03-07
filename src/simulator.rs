@@ -80,25 +80,18 @@ impl Simulator {
 
     fn do_mov(&mut self, dest: Reg, src: RegOrImm64) {
         match src {
-            RegOrImm64::Imm(Imm64(val)) => self
-                .registers
-                .get_mut_reg(dest)
-                .copy_from_slice(&val.to_ne_bytes()),
-            // Otherwise we get complaints about multiple mutable borrows.
-            RegOrImm64::Reg(reg) => unsafe {
-                self.registers
-                    .get_mut_reg(dest)
-                    .as_mut_ptr()
-                    .copy_from(self.registers.get_mut_reg(reg).as_mut_ptr(), 8);
-            },
+            RegOrImm64::Imm(Imm64(val)) => *self.registers.get_mut_reg(dest) = val,
+            RegOrImm64::Reg(reg) => {
+                *self.registers.get_mut_reg(dest) = *self.registers.get_mut_reg(reg)
+            }
         }
     }
 
     fn do_add_sub(&mut self, dest: Reg, src: RegOrImm32) {
-        let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
+        let lhs = *self.registers.get_mut_reg(dest);
         let rhs = match src {
             RegOrImm32::Imm(imm) => u64::from(imm),
-            RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
+            RegOrImm32::Reg(reg) => *self.registers.get_mut_reg(reg),
         };
 
         let ((_, unsigned_overflow), (result, signed_overflow)) = match *self.current_instr() {
@@ -116,16 +109,14 @@ impl Simulator {
         self.registers.flags.set_of(signed_overflow);
         self.registers.flags.set_zf(result == 0);
         self.registers.flags.set_sf(result.signum() == -1);
-        self.registers
-            .get_mut_reg(dest)
-            .copy_from_slice(&result.to_le_bytes());
+        *self.registers.get_mut_reg(dest) = result.cast_unsigned();
     }
 
     fn do_xor(&mut self, dest: Reg, src: RegOrImm32) {
-        let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
+        let lhs = *self.registers.get_mut_reg(dest);
         let rhs = match src {
             RegOrImm32::Imm(imm) => u64::from(imm),
-            RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
+            RegOrImm32::Reg(reg) => *self.registers.get_mut_reg(reg),
         };
 
         let result = lhs ^ rhs;
@@ -136,16 +127,14 @@ impl Simulator {
         self.registers
             .flags
             .set_sf(result.cast_signed().signum() == -1);
-        self.registers
-            .get_mut_reg(dest)
-            .copy_from_slice(&result.to_le_bytes());
+        *self.registers.get_mut_reg(dest) = result;
     }
 
     fn do_cmp(&mut self, dest: Reg, src: RegOrImm32) {
-        let lhs = u64::from_le_bytes(*self.registers.get_mut_reg(dest));
+        let lhs = *self.registers.get_mut_reg(dest);
         let rhs = match src {
             RegOrImm32::Imm(imm) => u64::from(imm),
-            RegOrImm32::Reg(reg) => u64::from_le_bytes(*self.registers.get_mut_reg(reg)),
+            RegOrImm32::Reg(reg) => *self.registers.get_mut_reg(reg),
         };
 
         let (_, unsigned_overflow) = lhs.overflowing_sub(rhs);
