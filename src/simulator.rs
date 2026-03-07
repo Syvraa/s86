@@ -43,8 +43,11 @@ impl Simulator {
         let mut branched = false;
         match &self.instrs[self.curr_instr] {
             Instr::Mov { dest, src } => self.do_mov(*dest, *src),
-            Instr::Add { dest, src } | Instr::Sub { dest, src } | Instr::Xor { dest, src } => {
-                self.do_binary_op(*dest, *src);
+            Instr::Add { dest, src } | Instr::Sub { dest, src } => {
+                self.do_add_sub(*dest, *src);
+            }
+            Instr::Xor { dest, src } => {
+                self.do_xor(*dest, *src);
             }
             Instr::Jmp { dest }
             | Instr::Je { dest }
@@ -91,23 +94,51 @@ impl Simulator {
         }
     }
 
-    fn do_binary_op(&mut self, dest: Reg, src: RegOrImm32) {
+    fn do_add_sub(&mut self, dest: Reg, src: RegOrImm32) {
         let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
         let rhs = match src {
             RegOrImm32::Imm(imm) => u64::from(imm),
             RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
         };
 
-        // TODO: separate these
-        let result = match *self.current_instr() {
-            Instr::Add { .. } => lhs.overflowing_add(rhs).0,
-            Instr::Sub { .. } => lhs.overflowing_sub(rhs).0,
-            Instr::Xor { .. } => lhs ^ rhs,
+        let ((_, unsigned_overflow), (result, signed_overflow)) = match *self.current_instr() {
+            Instr::Add { .. } => (
+                lhs.overflowing_add(rhs),
+                lhs.cast_signed().overflowing_add(rhs.cast_signed()),
+            ),
+            Instr::Sub { .. } => (
+                lhs.overflowing_sub(rhs),
+                lhs.cast_signed().overflowing_sub(rhs.cast_signed()),
+            ),
             _ => unreachable!("if you got this, you forgot to add a case"),
         };
+        self.registers.flags.set_cf(unsigned_overflow);
+        self.registers.flags.set_of(signed_overflow);
+        self.registers.flags.set_zf(result == 0);
+        self.registers.flags.set_sf(result.signum() == -1);
         self.registers
             .get_mut_reg(dest)
-            .copy_from_slice(&result.to_ne_bytes());
+            .copy_from_slice(&result.to_le_bytes());
+    }
+
+    fn do_xor(&mut self, dest: Reg, src: RegOrImm32) {
+        let lhs = u64::from_ne_bytes(*self.registers.get_mut_reg(dest));
+        let rhs = match src {
+            RegOrImm32::Imm(imm) => u64::from(imm),
+            RegOrImm32::Reg(reg) => u64::from_ne_bytes(*self.registers.get_mut_reg(reg)),
+        };
+
+        let result = lhs ^ rhs;
+
+        self.registers.flags.set_cf(false);
+        self.registers.flags.set_of(false);
+        self.registers.flags.set_zf(result == 0);
+        self.registers
+            .flags
+            .set_sf(result.cast_signed().signum() == -1);
+        self.registers
+            .get_mut_reg(dest)
+            .copy_from_slice(&result.to_le_bytes());
     }
 
     fn do_cmp(&mut self, dest: Reg, src: RegOrImm32) {
