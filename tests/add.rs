@@ -36,3 +36,23 @@ fn add_reg() {
 
     assert_eq!(simulator.registers.rcx, expected);
 }
+
+#[test]
+fn sign_extend() {
+    let expected: u64;
+    unsafe {
+        asm!(
+            "mov rax, -8",
+            "add rax, -1",
+            out("rax") expected);
+    }
+
+    let source = "
+    mov rax, -8
+    add rax, -1
+";
+    let mut simulator = Simulator::new(source);
+    simulator.run();
+
+    assert_eq!(simulator.registers.rax, expected);
+}

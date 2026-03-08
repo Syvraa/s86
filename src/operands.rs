@@ -11,6 +11,14 @@ impl From<Imm32> for u64 {
     }
 }
 
+impl Imm32 {
+    pub fn sign_extend(self) -> u64 {
+        // Treat self.0 as a signed integer, then convert it to i64, otherwise it won't get
+        // sign extended.
+        i64::from(self.0.cast_signed()).cast_unsigned()
+    }
+}
+
 impl TryFrom<i128> for Imm32 {
     type Error = TryFromIntError;
 

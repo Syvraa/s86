@@ -90,7 +90,7 @@ impl Simulator {
     fn do_add_sub(&mut self, dest: Reg, src: RegOrImm32) {
         let lhs = *self.registers.get_mut_reg(dest);
         let rhs = match src {
-            RegOrImm32::Imm(imm) => u64::from(imm),
+            RegOrImm32::Imm(imm) => imm.sign_extend(),
             RegOrImm32::Reg(reg) => *self.registers.get_mut_reg(reg),
         };
 
@@ -115,7 +115,7 @@ impl Simulator {
     fn do_xor(&mut self, dest: Reg, src: RegOrImm32) {
         let lhs = *self.registers.get_mut_reg(dest);
         let rhs = match src {
-            RegOrImm32::Imm(imm) => u64::from(imm),
+            RegOrImm32::Imm(imm) => imm.sign_extend(),
             RegOrImm32::Reg(reg) => *self.registers.get_mut_reg(reg),
         };
 
@@ -133,7 +133,7 @@ impl Simulator {
     fn do_cmp(&mut self, dest: Reg, src: RegOrImm32) {
         let lhs = *self.registers.get_mut_reg(dest);
         let rhs = match src {
-            RegOrImm32::Imm(imm) => u64::from(imm),
+            RegOrImm32::Imm(imm) => imm.sign_extend(),
             RegOrImm32::Reg(reg) => *self.registers.get_mut_reg(reg),
         };
 
