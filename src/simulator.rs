@@ -82,7 +82,7 @@ impl Simulator {
         match src {
             RegOrImm64::Imm(Imm64(val)) => *self.registers.get_mut_reg(dest) = val,
             RegOrImm64::Reg(reg) => {
-                *self.registers.get_mut_reg(dest) = *self.registers.get_mut_reg(reg)
+                *self.registers.get_mut_reg(dest) = *self.registers.get_mut_reg(reg);
             }
         }
     }
