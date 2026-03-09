@@ -19,9 +19,11 @@ impl Lexer {
     pub fn lex(mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
 
-        self.skip_whitespace();
         while !self.is_at_end() {
             match self.current() {
+                c if c.is_whitespace() => {
+                    self.pos += 1;
+                }
                 ';' => {
                     while !self.is_at_end() && self.current() != '\n' {
                         self.pos += 1;
@@ -79,9 +81,6 @@ impl Lexer {
                 }
                 _ => panic!("unknown character: {}", self.current()),
             }
-            // Skip after, otherwise if the last character is a newline, we would skip it, then try
-            // to access out-of-bounds and crash.
-            self.skip_whitespace();
         }
 
         tokens
@@ -93,12 +92,6 @@ impl Lexer {
 
     fn current(&self) -> char {
         self.chars[self.pos]
-    }
-
-    fn skip_whitespace(&mut self) {
-        while !self.is_at_end() && self.current().is_whitespace() {
-            self.pos += 1;
-        }
     }
 }
 
