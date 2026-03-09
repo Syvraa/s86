@@ -124,26 +124,6 @@ impl<'a> Parser<'a> {
         instr_idx
     }
 
-    fn parse_branch(&mut self, op: Opcode) {
-        type O = Opcode;
-        let dest = self.get_instr_idx();
-        let instr = match op {
-            O::Je | O::Jz => Instr::Je { dest },
-            O::Jne | O::Jnz => Instr::Jne { dest },
-            O::Ja | O::Jnbe => Instr::Ja { dest },
-            O::Jae | O::Jnb => Instr::Jae { dest },
-            O::Jb | O::Jnae => Instr::Jb { dest },
-            O::Jbe | O::Jna => Instr::Jbe { dest },
-            O::Jg | O::Jnle => Instr::Jg { dest },
-            O::Jge | O::Jnl => Instr::Jge { dest },
-            O::Jl | O::Jnge => Instr::Jl { dest },
-            O::Jle | O::Jng => Instr::Jle { dest },
-            _ => unreachable!("you forgot to add a case in parse_opcode"),
-        };
-
-        self.instrs.push(instr);
-    }
-
     fn parse_mov(&mut self) {
         let Token::Reg(dest) = *self.consume() else {
             panic!("expected register");
