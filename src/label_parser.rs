@@ -68,6 +68,7 @@ impl<'a> LabelParser<'a> {
     }
 }
 
+/// By default, labels like mov: are parsed as an opcode. This function makes those into labels.
 pub fn fix_opcode_label_definitions(tokens: &mut [Token]) {
     for i in 0..tokens.len() {
         match tokens[i] {
