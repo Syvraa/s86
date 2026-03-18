@@ -12,7 +12,7 @@ fn add_single() {
     let source = "
     add rax, 8
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.registers.rax = 8;
     simulator.run();
     assert_eq!(simulator.registers.rax, expected);
@@ -29,7 +29,7 @@ fn add_reg() {
     let source = "
     add rcx, rax
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.registers.rax = 8;
     simulator.registers.rcx = 8;
     simulator.run();
@@ -51,7 +51,7 @@ fn sign_extend() {
     mov rax, -8
     add rax, -1
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
 
     assert_eq!(simulator.registers.rax, expected);

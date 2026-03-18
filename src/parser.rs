@@ -2,7 +2,10 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 
 use crate::{
     instruction::Instr,
-    operands::{Label, RegOrImm32, RegOrImm64},
+    operands::{
+        Imm32, Index, IndexReg, Label, Mem, Operand, RI32, RIConversionError, RM, RMI32, RMI64,
+        Scale, Size,
+    },
     tokens::{Opcode, Token},
 };
 
@@ -94,6 +97,123 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // TODO: Rewrite this. I hate it. There's definitely a better way.
+    fn parse_memory(&mut self, size: Size) -> Mem {
+        assert!(
+            self.next() == Some(&Token::LBracket),
+            "expected memory operand"
+        );
+        let mut base = None;
+        let mut index = None;
+        let mut disp = None;
+
+        let mut positive = true;
+        while let Some(tok) = self.next() {
+            match tok {
+                Token::RBracket => {
+                    if base.is_none() && index.is_none() && disp.is_none() {
+                        panic!("incomplete memory operand");
+                    } else {
+                        return Mem {
+                            base,
+                            index,
+                            disp,
+                            size,
+                        };
+                    }
+                }
+                // If we encounter a - or a +, then we start over, as we would fail the check at
+                // the end if it was something like + rax (we would consume the + and panic because
+                // the next token is not a +, a - or a ]).
+                Token::Minus => {
+                    positive = !positive;
+                    continue;
+                }
+                Token::Plus => {
+                    continue;
+                }
+                Token::Reg(reg)
+                    if *self.peek().expect("premature end of token stream") != Token::Star =>
+                {
+                    if base.is_none() {
+                        base = Some(*reg);
+                    } else {
+                        panic!("base register already given");
+                    }
+                }
+                Token::Reg(reg)
+                    if *self.peek().expect("premature end of token stream") == Token::Star =>
+                {
+                    assert!(index.is_none(), "index already given");
+
+                    self.next();
+                    if let Some(Token::Number(imm)) = self.next() {
+                        index = Some(Index {
+                            index: IndexReg::try_from(*reg)
+                                .expect("rsp cannot be used for indexing"),
+                            scale: Scale::try_from(*imm)
+                                .expect("scale factor can only be 1, 2, 4 or 8"),
+                        });
+                    } else {
+                        panic!("expected scale factor after index register");
+                    }
+                }
+                Token::Number(val) => {
+                    let (new_disp, overflow);
+                    if let Some(curr_disp) = disp {
+                        (new_disp, overflow) = curr_disp.0.cast_signed().overflowing_add(
+                            i32::try_from(*val).expect("displacement out of range"),
+                        );
+                    } else {
+                        (new_disp, overflow) = 0_i32.overflowing_add(
+                            i32::try_from(*val).expect("displacement out of range"),
+                        );
+                    }
+
+                    assert!(!overflow, "displacement exceeds signed dword bounds");
+                    disp = Some(Imm32(new_disp.cast_unsigned()));
+                }
+                _ => panic!("unexpected token"),
+            }
+
+            let peeked = self.peek().expect("premature end of token stream");
+            assert!(
+                !(*peeked != Token::Plus && *peeked != Token::Minus && *peeked != Token::RBracket),
+                "expected +, - or ]"
+            );
+        }
+
+        panic!("unclosed memory operand");
+    }
+
+    /// Expects a `-` to already be consumed.
+    fn parse_negative_number(&mut self) -> Operand {
+        let mut positive = false;
+        while let Some(Token::Minus) = self.peek() {
+            self.next();
+            positive = !positive;
+        }
+
+        let Token::Number(num) = *self.consume() else {
+            panic!("expected number");
+        };
+
+        Operand::Imm(if positive { num } else { -num })
+    }
+
+    fn parse_operand(&mut self) -> Operand {
+        let tok = self.consume().clone();
+        match tok {
+            Token::Reg(reg) => Operand::Reg(reg),
+            Token::Byte | Token::Word | Token::Dword | Token::Qword => {
+                Operand::Mem(self.parse_memory(Size::try_from(tok).unwrap()))
+            }
+            Token::Number(num) => Operand::Imm(num),
+            Token::Minus => self.parse_negative_number(),
+            _ => panic!("unexpected token"),
+        }
+    }
+
     fn parse_jmp(&mut self) {
         let label = match self.next().expect("expected label name") {
             Token::Opcode(op) => op.as_str(),
@@ -125,31 +245,77 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mov(&mut self) {
-        let Token::Reg(dest) = *self.consume() else {
-            panic!("expected register");
-        };
+        let dest = RM::try_from(self.parse_operand()).expect("expected register or memory operand");
         assert_eq!(self.next(), Some(&Token::Comma), "expected comma");
 
-        let src = RegOrImm64::try_from(self.consume()).expect("value is out of range");
+        let src = self.parse_operand();
 
-        self.instrs.push(Instr::Mov { dest, src });
+        match dest {
+            RM::Reg(reg) => self.instrs.push(Instr::Mov {
+                dest: reg,
+                src: RMI64::try_from(src).expect("value out of range for qword"),
+            }),
+            RM::Mem(mem) => self.instrs.push(Instr::MovMem {
+                dest: mem,
+                src: match RI32::try_from(src) {
+                    Ok(source) => source,
+                    Err(RIConversionError::NotRegOrImm) => {
+                        panic!("expected register or immediate")
+                    }
+                    Err(RIConversionError::ValueOutOfRange) => {
+                        panic!("value out of range for dword")
+                    }
+                },
+            }),
+        }
     }
 
     fn parse_binary_op(&mut self, op: Opcode) {
         type O = Opcode;
-        let Token::Reg(dest) = *self.consume() else {
-            panic!("expected register");
-        };
+        let dest = RM::try_from(self.parse_operand()).expect("expected register or memory operand");
         assert_eq!(self.next(), Some(&Token::Comma), "expected comma");
 
-        let src = RegOrImm32::try_from(self.consume()).expect("value is out of range");
+        let src = self.parse_operand();
 
-        let instr = match op {
-            O::Add => Instr::Add { dest, src },
-            O::Sub => Instr::Sub { dest, src },
-            O::Xor => Instr::Xor { dest, src },
-            O::Cmp => Instr::Cmp { dest, src },
-            _ => unreachable!("you forgot to add a case in parse_opcode"),
+        let instr = match dest {
+            RM::Reg(reg) => match op {
+                O::Add => Instr::Add {
+                    dest: reg,
+                    src: RMI32::try_from(src).expect("value out of range for dword"),
+                },
+                O::Sub => Instr::Sub {
+                    dest: reg,
+                    src: RMI32::try_from(src).expect("value out of range for dword"),
+                },
+                O::Xor => Instr::Xor {
+                    dest: reg,
+                    src: RMI32::try_from(src).expect("value out of range for dword"),
+                },
+                O::Cmp => Instr::Cmp {
+                    dest: reg,
+                    src: RMI32::try_from(src).expect("value out of range for dword"),
+                },
+                _ => unreachable!("you forgot to add a case in parse_opcode"),
+            },
+            RM::Mem(mem) => match op {
+                O::Add => Instr::AddMem {
+                    dest: mem,
+                    src: RI32::try_from(src).unwrap(),
+                },
+                O::Sub => Instr::SubMem {
+                    dest: mem,
+                    src: RI32::try_from(src).unwrap(),
+                },
+                O::Xor => Instr::XorMem {
+                    dest: mem,
+                    src: RI32::try_from(src).unwrap(),
+                },
+                O::Cmp => Instr::CmpMem {
+                    dest: mem,
+                    src: RI32::try_from(src).unwrap(),
+                },
+                _ => unreachable!("you forgot to add a case in parse_opcode"),
+            },
         };
 
         self.instrs.push(instr);
@@ -157,6 +323,10 @@ impl<'a> Parser<'a> {
 
     fn next(&mut self) -> Option<&'a Token> {
         self.tokens.next()
+    }
+
+    fn peek(&mut self) -> Option<&'a Token> {
+        self.tokens.peek().copied()
     }
 
     fn consume(&mut self) -> &Token {
@@ -170,7 +340,7 @@ mod tests {
     use crate::instruction::Instr;
     use crate::label_parser::{LabelParser, fix_opcode_label_definitions};
     use crate::lexer::Lexer;
-    use crate::operands::{Imm32, Imm64, Reg};
+    use crate::operands::{Imm32, Imm64, IndexReg, RMI64, Reg, Scale, Size};
 
     struct ParseResult {
         instrs: Vec<Instr>,
@@ -196,7 +366,7 @@ mod tests {
             parsed,
             vec![Instr::Mov {
                 dest: Reg::Rax,
-                src: RegOrImm64::Reg(Reg::Rbx)
+                src: RMI64::Reg(Reg::Rbx)
             }]
         );
     }
@@ -209,7 +379,7 @@ mod tests {
             parsed,
             vec![Instr::Add {
                 dest: Reg::Rax,
-                src: RegOrImm32::Imm(Imm32(8))
+                src: RMI32::Imm(Imm32(8))
             }]
         );
     }
@@ -227,15 +397,15 @@ mod tests {
             vec![
                 Instr::Add {
                     dest: Reg::Rax,
-                    src: RegOrImm32::Imm(Imm32(8))
+                    src: RMI32::Imm(Imm32(8))
                 },
                 Instr::Xor {
                     dest: Reg::Rax,
-                    src: RegOrImm32::Reg(Reg::Rax)
+                    src: RMI32::Reg(Reg::Rax)
                 },
                 Instr::Sub {
                     dest: Reg::Rbx,
-                    src: RegOrImm32::Reg(Reg::Rax)
+                    src: RMI32::Reg(Reg::Rax)
                 },
             ]
         );
@@ -293,7 +463,7 @@ mod tests {
             parsed.instrs,
             vec![Instr::Mov {
                 dest: Reg::Rax,
-                src: RegOrImm64::Imm(Imm64((-100_i64).cast_unsigned()))
+                src: RMI64::Imm(Imm64((-100_i64).cast_unsigned()))
             }]
         );
     }
@@ -305,5 +475,48 @@ mod tests {
     label::
 ";
         let _ = parse(source);
+    }
+
+    #[test]
+    fn memory_rsp() {
+        let source = "
+    mov qword [rsp], rax
+";
+        let parsed = parse(source);
+        assert_eq!(
+            parsed.instrs,
+            vec![Instr::MovMem {
+                dest: Mem {
+                    base: Some(Reg::Rsp),
+                    index: None,
+                    disp: None,
+                    size: Size::Qword
+                },
+                src: RI32::Reg(Reg::Rax)
+            }]
+        );
+    }
+
+    #[test]
+    fn memory_index() {
+        let source = "
+    mov dword [rax*8], rbx
+";
+        let parsed = parse(source);
+        assert_eq!(
+            parsed.instrs,
+            vec![Instr::MovMem {
+                dest: Mem {
+                    base: None,
+                    index: Some(Index {
+                        index: IndexReg::Rax,
+                        scale: Scale::Eight
+                    }),
+                    disp: None,
+                    size: Size::Dword
+                },
+                src: RI32::Reg(Reg::Rbx)
+            }]
+        );
     }
 }

@@ -1,13 +1,18 @@
-use crate::operands::{Reg, RegOrImm32, RegOrImm64};
+use crate::operands::{Mem, RI32, RMI32, RMI64, Reg};
 
 #[derive(Debug, PartialEq)]
 pub enum Instr {
-    Mov { dest: Reg, src: RegOrImm64 },
-    Add { dest: Reg, src: RegOrImm32 },
-    Sub { dest: Reg, src: RegOrImm32 },
-    Xor { dest: Reg, src: RegOrImm32 },
+    Mov { dest: Reg, src: RMI64 },
+    MovMem { dest: Mem, src: RI32 },
+    Add { dest: Reg, src: RMI32 },
+    AddMem { dest: Mem, src: RI32 },
+    Sub { dest: Reg, src: RMI32 },
+    SubMem { dest: Mem, src: RI32 },
+    Xor { dest: Reg, src: RMI32 },
+    XorMem { dest: Mem, src: RI32 },
+    Cmp { dest: Reg, src: RMI32 },
+    CmpMem { dest: Mem, src: RI32 },
     Jmp { dest: usize },
-    Cmp { dest: Reg, src: RegOrImm32 },
     Je { dest: usize },
     Jne { dest: usize },
     Ja { dest: usize },

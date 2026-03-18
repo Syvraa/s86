@@ -12,7 +12,7 @@ fn mov_negative() {
     let source = "
     mov rax, -8
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
     assert_eq!(simulator.registers.rax, expected);
 }
@@ -33,7 +33,7 @@ fn add_negative() {
     mov rax, -8
     add rcx, rax
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
 
     assert_eq!(simulator.registers.rcx, expected);

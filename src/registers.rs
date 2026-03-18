@@ -23,10 +23,32 @@ pub struct Registers {
     pub(crate) flags: Flags,
 }
 
-impl<'a> Registers {
-    pub fn get_mut_reg(&'a mut self, reg: Reg) -> &'a mut u64 {
+impl Registers {
+    pub fn read(&self, reg: Reg) -> u64 {
         type R = Reg;
         match reg {
+            R::Rax => self.rax,
+            R::Rbx => self.rbx,
+            R::Rcx => self.rcx,
+            R::Rdx => self.rdx,
+            R::Rsi => self.rsi,
+            R::Rdi => self.rdi,
+            R::Rsp => self.rsp,
+            R::Rbp => self.rbp,
+            R::R8 => self.r8,
+            R::R9 => self.r9,
+            R::R10 => self.r10,
+            R::R11 => self.r11,
+            R::R12 => self.r12,
+            R::R13 => self.r13,
+            R::R14 => self.r14,
+            R::R15 => self.r15,
+        }
+    }
+
+    pub fn write(&mut self, reg: Reg, value: u64) {
+        type R = Reg;
+        let reg = match reg {
             R::Rax => &mut self.rax,
             R::Rbx => &mut self.rbx,
             R::Rcx => &mut self.rcx,
@@ -43,7 +65,8 @@ impl<'a> Registers {
             R::R13 => &mut self.r13,
             R::R14 => &mut self.r14,
             R::R15 => &mut self.r15,
-        }
+        };
+        *reg = value;
     }
 
     pub fn flags(&self) -> &Flags {

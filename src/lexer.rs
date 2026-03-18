@@ -34,6 +34,30 @@ impl Lexer {
                     tokens.push(Token::Colon);
                     self.pos += 1;
                 }
+                '[' => {
+                    tokens.push(Token::LBracket);
+                    self.pos += 1;
+                }
+                ']' => {
+                    tokens.push(Token::RBracket);
+                    self.pos += 1;
+                }
+                '+' => {
+                    tokens.push(Token::Plus);
+                    self.pos += 1;
+                }
+                '-' => {
+                    tokens.push(Token::Minus);
+                    self.pos += 1;
+                }
+                '*' => {
+                    tokens.push(Token::Star);
+                    self.pos += 1;
+                }
+                ',' => {
+                    tokens.push(Token::Comma);
+                    self.pos += 1;
+                }
                 '.' => {
                     let mut scanned = String::from(".");
                     self.pos += 1;
@@ -46,17 +70,7 @@ impl Lexer {
 
                     tokens.push(Token::Sublabel(Label(scanned)));
                 }
-                ',' => {
-                    tokens.push(Token::Comma);
-                    self.pos += 1;
-                }
-                '0'..='9' | '-' => {
-                    let mut positive = true;
-                    while !self.is_at_end() && self.current() == '-' {
-                        positive = !positive;
-                        self.pos += 1;
-                    }
-
+                '0'..='9' => {
                     let mut scanned = String::new();
                     while !self.is_at_end() && self.current().is_numeric() {
                         scanned.push(self.current());
@@ -64,7 +78,7 @@ impl Lexer {
                     }
 
                     let number = scanned.parse().expect("number out of range");
-                    tokens.push(Token::Imm(if positive { number } else { -number }));
+                    tokens.push(Token::Number(number));
                 }
                 'a'..='z' => {
                     let mut scanned = String::new();
@@ -73,7 +87,7 @@ impl Lexer {
                         self.pos += 1;
                     }
 
-                    if let Some(token) = TOKENLOOKUP.get(&scanned).cloned() {
+                    if let Some(token) = TOKENLOOKUP.get(&scanned.to_lowercase()).cloned() {
                         tokens.push(token);
                     } else {
                         tokens.push(Token::Label(Label(scanned)));
@@ -137,6 +151,10 @@ pub static TOKENLOOKUP: phf::Map<&str, Token> = phf_map! {
     "r13" => Token::Reg(Reg::R13),
     "r14" => Token::Reg(Reg::R14),
     "r15" => Token::Reg(Reg::R15),
+    "byte" => Token::Byte,
+    "word" => Token::Word,
+    "dword" => Token::Dword,
+    "qword" => Token::Qword,
 };
 
 #[cfg(test)]
@@ -153,7 +171,7 @@ mod tests {
     fn number() {
         let src = "999";
         let out = lex(src);
-        assert_eq!(out[0], Token::Imm(999));
+        assert_eq!(out[0], Token::Number(999));
     }
 
     #[test]
@@ -243,7 +261,7 @@ mod tests {
                 Token::Opcode(Opcode::Add),
                 Token::Reg(Reg::Rax),
                 Token::Comma,
-                Token::Imm(8),
+                Token::Number(8),
                 Token::Sublabel(Label(".".into())),
                 Token::Colon,
                 Token::Opcode(Opcode::Jmp),
@@ -281,27 +299,6 @@ mod tests {
                 Token::Sublabel(Label(".label".into()))
             ]
         );
-    }
-
-    #[test]
-    fn negative_number() {
-        let src = "-100 --100 ---100
-";
-
-        let out = lex(src);
-        assert_eq!(
-            out,
-            vec![Token::Imm(-100), Token::Imm(100), Token::Imm(-100)]
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "number out of range")]
-    fn naked_negations() {
-        let src = "- --100 ---100
-";
-
-        let _ = lex(src);
     }
 
     #[test]
