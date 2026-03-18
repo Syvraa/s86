@@ -12,7 +12,7 @@ fn mov_single() {
     let source = "
     mov rax, 8
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
     assert_eq!(simulator.registers.rax, expected);
 }
@@ -30,7 +30,7 @@ fn mov_reg() {
     mov rax, 8
     mov rcx, rax
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
 
     assert_eq!(simulator.registers.rcx, expected);

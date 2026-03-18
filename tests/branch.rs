@@ -22,7 +22,7 @@ fn je() {
     mov rax, 8
     end:
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
     assert_eq!(simulator.registers.rax, expected);
 }
@@ -47,7 +47,7 @@ fn ja() {
     mov rax, 8
     end:
 ";
-    let mut simulator = Simulator::new(source);
+    let mut simulator = Simulator::new(source, 0);
     simulator.run();
     assert_eq!(simulator.registers.rax, expected);
 }
