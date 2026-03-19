@@ -532,11 +532,14 @@ impl From<RI32> for SimulatorOperand {
     }
 }
 
-impl<T: Into<RM>> From<T> for SimulatorOperand {
+impl<T> From<T> for SimulatorOperand
+where
+    T: Into<RM>,
+{
     fn from(value: T) -> Self {
-        match Into::into(value) {
-            RM::Reg(reg) => SimulatorOperand::Reg(reg),
-            RM::Mem(mem) => SimulatorOperand::Mem(mem),
+        match value.into() {
+            RM::Reg(reg) => Self::Reg(reg),
+            RM::Mem(mem) => Self::Mem(mem),
         }
     }
 }
