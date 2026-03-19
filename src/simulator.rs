@@ -101,7 +101,9 @@ impl Simulator {
 
     #[allow(clippy::cast_possible_truncation)]
     fn get_mem_index(&self, mem: Mem) -> usize {
-        let mut address = mem.base.map_or(0, |reg| self.registers.read(reg));
+        let mut address = mem
+            .base
+            .map_or(0, |base_reg| self.registers.read(Reg::from(base_reg)));
         address += mem.index.map_or(0, |idx| {
             self.registers.read(Reg::from(idx.index)) * idx.scale as u64
         });
@@ -148,15 +150,13 @@ impl Simulator {
     fn read_memory(&self, mem: Mem) -> Result<u64, ()> {
         let address = self.get_mem_index(mem);
         let mut bytes = [0u8; 8];
-        splice(
-            &mut bytes,
-            match mem.size {
-                Size::Byte => self.memory.get(address..address + 1).ok_or(())?,
-                Size::Word => self.memory.get(address..address + 2).ok_or(())?,
-                Size::Dword => self.memory.get(address..address + 4).ok_or(())?,
-                Size::Qword => self.memory.get(address..address + 8).ok_or(())?,
-            },
-        );
+        let source = match mem.size {
+            Size::Byte => self.memory.get(address..address + 1).ok_or(())?,
+            Size::Word => self.memory.get(address..address + 2).ok_or(())?,
+            Size::Dword => self.memory.get(address..address + 4).ok_or(())?,
+            Size::Qword => self.memory.get(address..address + 8).ok_or(())?,
+        };
+        bytes[0..source.len()].copy_from_slice(source);
 
         Ok(u64::from_le_bytes(bytes))
     }
@@ -285,12 +285,4 @@ impl Simulator {
     pub fn current_instr(&self) -> &'_ Instr {
         &self.instrs[self.curr_instr]
     }
-}
-
-/// Overwrites the start of `dest` with the contents of `src`.
-/// `src.len()` must be smaller than `dest.len()`.
-fn splice(dest: &mut [u8], src: &[u8]) {
-    assert!(dest.len() >= src.len());
-
-    dest[..src.len()].copy_from_slice(src);
 }

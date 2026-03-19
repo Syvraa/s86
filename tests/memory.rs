@@ -3,7 +3,7 @@ use s86::Simulator;
 #[test]
 fn read_dword() {
     let source = "
-    mov rax, dword [0]
+    mov rax, qword [0]
 ";
     let mut simulator = Simulator::new(source, 16);
     simulator.run();
@@ -15,19 +15,19 @@ fn read_dword() {
 fn write_byte() {
     let source = "
     mov byte [1], 8
-    mov rax, byte [1]
+    mov ah, byte [1]
 ";
     let mut simulator = Simulator::new(source, 16);
     simulator.run();
 
-    assert_eq!(simulator.registers.rax, 8);
+    assert_eq!(simulator.registers.rax, 8 << 8);
 }
 
 #[test]
 fn write_dword() {
     let source = "
     mov dword [1], 8
-    mov rax, dword [1]
+    mov eax, dword [1]
 ";
     let mut simulator = Simulator::new(source, 16);
     simulator.run();
@@ -52,7 +52,7 @@ fn dynamic_address() {
 fn offset() {
     let source = "
     mov byte [1+2], 3
-    mov rax, byte [1+2]
+    mov al, byte [1+2]
 ";
     let mut simulator = Simulator::new(source, 16);
     simulator.run();
