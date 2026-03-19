@@ -3,8 +3,8 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 use crate::{
     instruction::Instr,
     operands::{
-        Imm32, Index, IndexReg, Label, Mem, Operand, RI32, RIConversionError, RM, RMI32, RMI64,
-        Scale, Size,
+        BaseReg, Bits as _, Imm32, Index, IndexReg, Label, Mem, Operand, RI32, RIConversionError,
+        RM, RMI32, RMI64, Scale, Size,
     },
     tokens::{Opcode, Token},
 };
@@ -136,7 +136,7 @@ impl<'a> Parser<'a> {
                     if *self.peek().expect("premature end of token stream") != Token::Star =>
                 {
                     if base.is_none() {
-                        base = Some(*reg);
+                        base = Some(BaseReg::try_from(*reg).expect("invalid register for base"));
                     } else {
                         panic!("base register already given");
                     }
@@ -249,6 +249,20 @@ impl<'a> Parser<'a> {
         assert_eq!(self.next(), Some(&Token::Comma), "expected comma");
 
         let src = self.parse_operand();
+        match src {
+            Operand::Reg(reg) => {
+                assert!(dest.size() == reg.size(), "operands are not the same size");
+            }
+            Operand::Mem(mem) => {
+                assert!(dest.size() == mem.size, "operands are not the same size");
+            }
+            Operand::Imm(imm) => {
+                assert!(
+                    dest.size().bits() >= imm.bits(),
+                    "source does not fit into destination"
+                );
+            }
+        }
 
         match dest {
             RM::Reg(reg) => self.instrs.push(Instr::Mov {
@@ -276,7 +290,20 @@ impl<'a> Parser<'a> {
         assert_eq!(self.next(), Some(&Token::Comma), "expected comma");
 
         let src = self.parse_operand();
-
+        match src {
+            Operand::Reg(reg) => {
+                assert!(dest.size() == reg.size(), "operands are not the same size");
+            }
+            Operand::Mem(mem) => {
+                assert!(dest.size() == mem.size, "operands are not the same size");
+            }
+            Operand::Imm(imm) => {
+                assert!(
+                    dest.size().bits() >= imm.bits(),
+                    "source does not fit into destination"
+                );
+            }
+        }
         let instr = match dest {
             RM::Reg(reg) => match op {
                 O::Add => Instr::Add {
@@ -340,7 +367,10 @@ mod tests {
     use crate::instruction::Instr;
     use crate::label_parser::{LabelParser, fix_opcode_label_definitions};
     use crate::lexer::Lexer;
-    use crate::operands::{Imm32, Imm64, IndexReg, RMI64, Reg, Scale, Size};
+    use crate::operands::{
+        DwordIndexReg, DwordReg, Imm32, Imm64, IndexReg, QwordIndexReg, QwordReg, RMI64, Reg,
+        Scale, Size,
+    };
 
     struct ParseResult {
         instrs: Vec<Instr>,
@@ -365,8 +395,8 @@ mod tests {
         assert_eq!(
             parsed,
             vec![Instr::Mov {
-                dest: Reg::Rax,
-                src: RMI64::Reg(Reg::Rbx)
+                dest: Reg::Qword(QwordReg::Rax),
+                src: RMI64::Reg(Reg::Qword(QwordReg::Rbx))
             }]
         );
     }
@@ -378,7 +408,7 @@ mod tests {
         assert_eq!(
             parsed,
             vec![Instr::Add {
-                dest: Reg::Rax,
+                dest: Reg::Qword(QwordReg::Rax),
                 src: RMI32::Imm(Imm32(8))
             }]
         );
@@ -396,16 +426,16 @@ mod tests {
             parsed,
             vec![
                 Instr::Add {
-                    dest: Reg::Rax,
+                    dest: Reg::Qword(QwordReg::Rax),
                     src: RMI32::Imm(Imm32(8))
                 },
                 Instr::Xor {
-                    dest: Reg::Rax,
-                    src: RMI32::Reg(Reg::Rax)
+                    dest: Reg::Qword(QwordReg::Rax),
+                    src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
                 },
                 Instr::Sub {
-                    dest: Reg::Rbx,
-                    src: RMI32::Reg(Reg::Rax)
+                    dest: Reg::Qword(QwordReg::Rbx),
+                    src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
                 },
             ]
         );
@@ -462,7 +492,7 @@ mod tests {
         assert_eq!(
             parsed.instrs,
             vec![Instr::Mov {
-                dest: Reg::Rax,
+                dest: Reg::Qword(QwordReg::Rax),
                 src: RMI64::Imm(Imm64((-100_i64).cast_unsigned()))
             }]
         );
@@ -487,12 +517,12 @@ mod tests {
             parsed.instrs,
             vec![Instr::MovMem {
                 dest: Mem {
-                    base: Some(Reg::Rsp),
+                    base: Some(BaseReg::Qword(QwordReg::Rsp)),
                     index: None,
                     disp: None,
                     size: Size::Qword
                 },
-                src: RI32::Reg(Reg::Rax)
+                src: RI32::Reg(Reg::Qword(QwordReg::Rax)),
             }]
         );
     }
@@ -500,7 +530,7 @@ mod tests {
     #[test]
     fn memory_index() {
         let source = "
-    mov dword [rax*8], rbx
+    mov dword [rax*8], ebx
 ";
         let parsed = parse(source);
         assert_eq!(
@@ -509,14 +539,32 @@ mod tests {
                 dest: Mem {
                     base: None,
                     index: Some(Index {
-                        index: IndexReg::Rax,
+                        index: IndexReg::Qword(QwordIndexReg::Rax),
                         scale: Scale::Eight
                     }),
                     disp: None,
                     size: Size::Dword
                 },
-                src: RI32::Reg(Reg::Rbx)
+                src: RI32::Reg(Reg::Dword(DwordReg::Ebx)),
             }]
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "source does not fit into destination")]
+    fn size_not_equal() {
+        let source = "
+    mov byte [eax], 256
+";
+        let _ = parse(source);
+    }
+
+    #[test]
+    #[should_panic(expected = "source does not fit into destination")]
+    fn negative_does_not_fit() {
+        let source = "
+    mov al, -129
+";
+        let _ = parse(source);
     }
 }

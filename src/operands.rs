@@ -49,7 +49,7 @@ impl TryFrom<i128> for Imm64 {
 pub struct Label(pub String);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Reg {
+pub enum QwordReg {
     Rax,
     Rbx,
     Rcx,
@@ -68,25 +68,93 @@ pub enum Reg {
     R15,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DwordReg {
+    Eax,
+    Ebx,
+    Ecx,
+    Edx,
+    Esi,
+    Edi,
+    Esp,
+    Ebp,
+    R8d,
+    R9d,
+    R10d,
+    R11d,
+    R12d,
+    R13d,
+    R14d,
+    R15d,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WordReg {
+    Ax,
+    Bx,
+    Cx,
+    Dx,
+    Si,
+    Di,
+    Sp,
+    Bp,
+    R8w,
+    R9w,
+    R10w,
+    R11w,
+    R12w,
+    R13w,
+    R14w,
+    R15w,
+}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ByteReg {
+    Ah,
+    Al,
+    Bh,
+    Bl,
+    Ch,
+    Cl,
+    Dh,
+    Dl,
+    Sil,
+    Dil,
+    Spl,
+    Bpl,
+    R8b,
+    R9b,
+    R10b,
+    R11b,
+    R12b,
+    R13b,
+    R14b,
+    R15b,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Reg {
+    Qword(QwordReg),
+    Dword(DwordReg),
+    Word(WordReg),
+    Byte(ByteReg),
+}
+
+impl Reg {
+    pub fn size(self) -> Size {
+        match self {
+            Self::Qword(_) => Size::Qword,
+            Self::Dword(_) => Size::Dword,
+            Self::Word(_) => Size::Word,
+            Self::Byte(_) => Size::Byte,
+        }
+    }
+}
+
 impl From<IndexReg> for Reg {
     fn from(value: IndexReg) -> Self {
-        type IR = IndexReg;
         match value {
-            IR::Rax => Self::Rax,
-            IR::Rbx => Self::Rbx,
-            IR::Rcx => Self::Rcx,
-            IR::Rdx => Self::Rdx,
-            IR::Rsi => Self::Rsi,
-            IR::Rdi => Self::Rdi,
-            IR::Rbp => Self::Rbp,
-            IR::R8 => Self::R8,
-            IR::R9 => Self::R9,
-            IR::R10 => Self::R10,
-            IR::R11 => Self::R11,
-            IR::R12 => Self::R12,
-            IR::R13 => Self::R13,
-            IR::R14 => Self::R14,
-            IR::R15 => Self::R15,
+            IndexReg::Qword(reg) => Reg::Qword(QwordReg::from(reg)),
+            IndexReg::Dword(reg) => Reg::Dword(DwordReg::from(reg)),
         }
     }
 }
@@ -101,9 +169,8 @@ impl TryFrom<Operand> for Reg {
     }
 }
 
-// Reg without rsp.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum IndexReg {
+pub enum QwordIndexReg {
     Rax,
     Rbx,
     Rcx,
@@ -121,27 +188,131 @@ pub enum IndexReg {
     R15,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DwordIndexReg {
+    Eax,
+    Ebx,
+    Ecx,
+    Edx,
+    Esi,
+    Edi,
+    Ebp,
+    R8d,
+    R9d,
+    R10d,
+    R11d,
+    R12d,
+    R13d,
+    R14d,
+    R15d,
+}
+
+impl From<QwordIndexReg> for QwordReg {
+    fn from(value: QwordIndexReg) -> Self {
+        match value {
+            QwordIndexReg::Rax => Self::Rax,
+            QwordIndexReg::Rbx => Self::Rbx,
+            QwordIndexReg::Rcx => Self::Rcx,
+            QwordIndexReg::Rdx => Self::Rdx,
+            QwordIndexReg::Rsi => Self::Rsi,
+            QwordIndexReg::Rdi => Self::Rdi,
+            QwordIndexReg::Rbp => Self::Rbp,
+            QwordIndexReg::R8 => Self::R8,
+            QwordIndexReg::R9 => Self::R9,
+            QwordIndexReg::R10 => Self::R10,
+            QwordIndexReg::R11 => Self::R11,
+            QwordIndexReg::R12 => Self::R12,
+            QwordIndexReg::R13 => Self::R13,
+            QwordIndexReg::R14 => Self::R14,
+            QwordIndexReg::R15 => Self::R15,
+        }
+    }
+}
+
+impl From<DwordIndexReg> for DwordReg {
+    fn from(value: DwordIndexReg) -> Self {
+        match value {
+            DwordIndexReg::Eax => Self::Eax,
+            DwordIndexReg::Ebx => Self::Ebx,
+            DwordIndexReg::Ecx => Self::Ecx,
+            DwordIndexReg::Edx => Self::Edx,
+            DwordIndexReg::Esi => Self::Esi,
+            DwordIndexReg::Edi => Self::Edi,
+            DwordIndexReg::Ebp => Self::Ebp,
+            DwordIndexReg::R8d => Self::R8d,
+            DwordIndexReg::R9d => Self::R9d,
+            DwordIndexReg::R10d => Self::R10d,
+            DwordIndexReg::R11d => Self::R11d,
+            DwordIndexReg::R12d => Self::R12d,
+            DwordIndexReg::R13d => Self::R13d,
+            DwordIndexReg::R14d => Self::R14d,
+            DwordIndexReg::R15d => Self::R15d,
+        }
+    }
+}
+
+impl TryFrom<QwordReg> for QwordIndexReg {
+    type Error = ();
+    fn try_from(value: QwordReg) -> Result<Self, Self::Error> {
+        match value {
+            QwordReg::Rax => Ok(Self::Rax),
+            QwordReg::Rbx => Ok(Self::Rbx),
+            QwordReg::Rcx => Ok(Self::Rcx),
+            QwordReg::Rdx => Ok(Self::Rdx),
+            QwordReg::Rsi => Ok(Self::Rsi),
+            QwordReg::Rdi => Ok(Self::Rdi),
+            QwordReg::Rbp => Ok(Self::Rbp),
+            QwordReg::R8 => Ok(Self::R8),
+            QwordReg::R9 => Ok(Self::R9),
+            QwordReg::R10 => Ok(Self::R10),
+            QwordReg::R11 => Ok(Self::R11),
+            QwordReg::R12 => Ok(Self::R12),
+            QwordReg::R13 => Ok(Self::R13),
+            QwordReg::R14 => Ok(Self::R14),
+            QwordReg::R15 => Ok(Self::R15),
+            QwordReg::Rsp => Err(()),
+        }
+    }
+}
+
+impl TryFrom<DwordReg> for DwordIndexReg {
+    type Error = ();
+    fn try_from(value: DwordReg) -> Result<Self, Self::Error> {
+        match value {
+            DwordReg::Eax => Ok(Self::Eax),
+            DwordReg::Ebx => Ok(Self::Ebx),
+            DwordReg::Ecx => Ok(Self::Ecx),
+            DwordReg::Edx => Ok(Self::Edx),
+            DwordReg::Esi => Ok(Self::Esi),
+            DwordReg::Edi => Ok(Self::Edi),
+            DwordReg::Ebp => Ok(Self::Ebp),
+            DwordReg::R8d => Ok(Self::R8d),
+            DwordReg::R9d => Ok(Self::R9d),
+            DwordReg::R10d => Ok(Self::R10d),
+            DwordReg::R11d => Ok(Self::R11d),
+            DwordReg::R12d => Ok(Self::R12d),
+            DwordReg::R13d => Ok(Self::R13d),
+            DwordReg::R14d => Ok(Self::R14d),
+            DwordReg::R15d => Ok(Self::R15d),
+            DwordReg::Esp => Err(()),
+        }
+    }
+}
+
+// Reg without rsp.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum IndexReg {
+    Qword(QwordIndexReg),
+    Dword(DwordIndexReg),
+}
+
 impl TryFrom<Reg> for IndexReg {
     type Error = ();
     fn try_from(value: Reg) -> Result<Self, Self::Error> {
-        type R = Reg;
         match value {
-            R::Rax => Ok(Self::Rax),
-            R::Rbx => Ok(Self::Rbx),
-            R::Rcx => Ok(Self::Rcx),
-            R::Rdx => Ok(Self::Rdx),
-            R::Rsi => Ok(Self::Rsi),
-            R::Rdi => Ok(Self::Rdi),
-            R::Rbp => Ok(Self::Rbp),
-            R::R8 => Ok(Self::R8),
-            R::R9 => Ok(Self::R9),
-            R::R10 => Ok(Self::R10),
-            R::R11 => Ok(Self::R11),
-            R::R12 => Ok(Self::R12),
-            R::R13 => Ok(Self::R13),
-            R::R14 => Ok(Self::R14),
-            R::R15 => Ok(Self::R15),
-            R::Rsp => Err(()),
+            Reg::Qword(reg) => Ok(Self::Qword(QwordIndexReg::try_from(reg)?)),
+            Reg::Dword(reg) => Ok(Self::Dword(DwordIndexReg::try_from(reg)?)),
+            _ => Err(()),
         }
     }
 }
@@ -167,12 +338,24 @@ impl TryFrom<i128> for Scale {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Size {
     Byte,
     Word,
     Dword,
     Qword,
+}
+
+impl Bits for Size {
+    /// How many bits the Size represents.
+    fn bits(self) -> u32 {
+        match self {
+            Size::Byte => 8,
+            Size::Word => 16,
+            Size::Dword => 32,
+            Size::Qword => 64,
+        }
+    }
 }
 
 impl TryFrom<Token> for Size {
@@ -195,8 +378,34 @@ pub struct Index {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BaseReg {
+    Qword(QwordReg),
+    Dword(DwordReg),
+}
+
+impl From<BaseReg> for Reg {
+    fn from(value: BaseReg) -> Self {
+        match value {
+            BaseReg::Qword(reg) => Self::Qword(reg),
+            BaseReg::Dword(reg) => Self::Dword(reg),
+        }
+    }
+}
+
+impl TryFrom<Reg> for BaseReg {
+    type Error = ();
+    fn try_from(value: Reg) -> Result<Self, Self::Error> {
+        match value {
+            Reg::Qword(reg) => Ok(Self::Qword(reg)),
+            Reg::Dword(reg) => Ok(Self::Dword(reg)),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Mem {
-    pub base: Option<Reg>,
+    pub base: Option<BaseReg>,
     pub index: Option<Index>,
     pub disp: Option<Imm32>,
     pub size: Size,
@@ -242,6 +451,15 @@ impl TryFrom<Operand> for RMI64 {
 pub enum RM {
     Reg(Reg),
     Mem(Mem),
+}
+
+impl RM {
+    pub fn size(&self) -> Size {
+        match self {
+            Self::Reg(reg) => reg.size(),
+            Self::Mem(mem) => mem.size,
+        }
+    }
 }
 
 impl From<Reg> for RM {
@@ -323,6 +541,7 @@ impl<T: Into<RM>> From<T> for SimulatorOperand {
     }
 }
 
+#[derive(Debug)]
 pub enum Operand {
     Reg(Reg),
     Mem(Mem),
@@ -363,6 +582,34 @@ impl TryFrom<Operand> for RI32 {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Imm(imm) => Ok(Self::Imm(Imm32::try_from(imm)?)),
             Operand::Mem(_) => Err(RIConversionError::NotRegOrImm),
+        }
+    }
+}
+
+pub trait Bits {
+    fn bits(self) -> u32;
+}
+
+impl Bits for i128 {
+    /// How many bits this number takes.
+    #[allow(clippy::comparison_chain)]
+    fn bits(self) -> u32 {
+        if self == 0 {
+            8
+        } else if self < 0 {
+            if i8::try_from(self).is_ok() {
+                8
+            } else if i16::try_from(self).is_ok() {
+                16
+            } else if i32::try_from(self).is_ok() {
+                32
+            } else if i64::try_from(self).is_ok() {
+                64
+            } else {
+                128
+            }
+        } else {
+            self.cast_unsigned().ilog2() + 1
         }
     }
 }
