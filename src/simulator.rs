@@ -100,6 +100,8 @@ impl Simulator {
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    /// Gets the index the memory operand points to.
+    /// Basically `lea`.
     fn get_mem_index(&self, mem: Mem) -> usize {
         let mut address = mem
             .base
@@ -161,6 +163,7 @@ impl Simulator {
         Ok(u64::from_le_bytes(bytes))
     }
 
+    /// Writes to the given operand. Truncates `value` to the given size.
     fn write(&mut self, dest: impl Into<RM>, value: u64) -> Result<(), ()> {
         match dest.into() {
             RM::Reg(reg) => self.registers.write(reg, value),
@@ -170,6 +173,7 @@ impl Simulator {
         Ok(())
     }
 
+    /// Gets the value of the operand. Returns `Err(())` if memory access was out of bounds.
     fn get_value(&self, src: impl Into<SimulatorOperand>) -> Result<u64, ()> {
         match src.into() {
             SimulatorOperand::Imm(imm) => Ok(imm),
