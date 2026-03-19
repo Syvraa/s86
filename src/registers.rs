@@ -26,6 +26,7 @@ pub struct Registers {
 }
 
 impl Registers {
+    /// The unread bits are zeroed.
     pub fn read(&self, reg: Reg) -> u64 {
         match reg {
             Reg::Qword(reg) => self.read_qword(reg),
@@ -35,6 +36,7 @@ impl Registers {
         }
     }
 
+    /// Truncates `value` to fit into the destination
     pub fn write(&mut self, reg: Reg, value: u64) {
         match reg {
             Reg::Qword(reg) => self.write_qword(reg, value),
