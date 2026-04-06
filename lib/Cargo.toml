@@ -3,6 +3,14 @@ name = "s86"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+wasm-bindgen = ["dep:wasm-bindgen"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 bitfield = "0.19.4"
 phf = { version = "0.13.1", features = ["macros"] }
+
+wasm-bindgen = { version = "0.2.117", optional = true }

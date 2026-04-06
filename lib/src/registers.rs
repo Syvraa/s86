@@ -1,10 +1,13 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use bitfield::bitfield;
+#[cfg(feature = "wasm-bindgen")]
+use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::operands::{ByteReg, DwordReg, QwordReg, Reg, WordReg};
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
+#[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 pub struct Registers {
     pub rax: u64,
     pub rbx: u64,
@@ -257,6 +260,7 @@ impl Registers {
 }
 
 bitfield! {
+    #[derive(Clone, Copy)]
     pub struct Flags(u64);
     bool;
     pub cf, set_cf: 0;

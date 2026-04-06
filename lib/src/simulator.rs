@@ -1,23 +1,42 @@
+#[cfg(feature = "wasm-bindgen")]
+use wasm_bindgen::prelude::wasm_bindgen;
+
 use crate::{
+    diff::{Diff, DiffReg, MemDiff, RegDiff, StateDiff},
     instruction::Instr,
     label_parser::{LabelParser, fix_opcode_label_definitions},
     lexer::Lexer,
     operands::{Mem, RM, Reg, SimulatorOperand, Size},
     parser::Parser,
     registers::Registers,
+    simulator_error::SimulatorError,
 };
 
 /// Memory is stored in little endian format.
+#[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 pub struct Simulator {
     pub registers: Registers,
+    #[cfg(not(feature = "wasm-bindgen"))]
     pub memory: Vec<u8>,
+    #[cfg(feature = "wasm-bindgen")]
+    memory: Vec<u8>,
     instrs: Vec<Instr>,
     curr_instr: usize,
 }
 
+#[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 impl Simulator {
+    /// Keep in mind this clones the entire array, so probably don't call it frequently.
+    #[allow(clippy::must_use_candidate)]
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[cfg(feature = "wasm-bindgen")]
+    pub fn memory(&self) -> Box<[u8]> {
+        self.memory.clone().into_boxed_slice()
+    }
+
     #[must_use]
-    pub fn new(source: &str, mem_size: usize) -> Self {
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen(constructor))]
+    pub fn new(source: &str, mem_size: usize) -> Simulator {
         let mut tokens = Lexer::new(source).lex();
         fix_opcode_label_definitions(&mut tokens);
         let labels = LabelParser::new(tokens.iter()).parse();
@@ -39,34 +58,39 @@ impl Simulator {
         }
     }
 
-    pub fn run(&mut self) {
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[allow(clippy::missing_errors_doc)]
+    pub fn run(&mut self) -> Result<(), SimulatorError> {
         while self.curr_instr < self.instrs.len() {
-            self.step();
+            // We won't get an Err(SimulatorError::EndOfInstruction), because we just checked the
+            // condition.
+            self.step()?;
         }
+
+        Ok(())
     }
 
-    pub fn step(&mut self) {
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[allow(clippy::missing_errors_doc)]
+    pub fn step(&mut self) -> Result<StateDiff, SimulatorError> {
         if self.curr_instr >= self.instrs.len() {
-            return;
+            return Err(SimulatorError::EndOfInstructions);
         }
 
         // Needed, otherwise we would not execute the instruction we branched to.
         let mut branched = false;
+        let mut diffs = StateDiff::default();
         match &self.instrs[self.curr_instr] {
-            Instr::Mov { dest, src } => self.do_mov(*dest, *src),
-            Instr::MovMem { dest, src } => self.do_mov(*dest, *src),
+            Instr::Mov { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
+            Instr::MovMem { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
             Instr::Add { dest, src } | Instr::Sub { dest, src } => {
-                self.do_add_sub(*dest, *src);
+                diffs.push(self.do_add_sub(*dest, *src)?);
             }
             Instr::AddMem { dest, src } | Instr::SubMem { dest, src } => {
-                self.do_add_sub(*dest, *src);
+                diffs.push(self.do_add_sub(*dest, *src)?);
             }
-            Instr::Xor { dest, src } => {
-                self.do_xor(*dest, *src);
-            }
-            Instr::XorMem { dest, src } => {
-                self.do_xor(*dest, *src);
-            }
+            Instr::Xor { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
+            Instr::XorMem { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
             Instr::Jmp { dest }
             | Instr::Je { dest }
             | Instr::Jne { dest }
@@ -83,22 +107,25 @@ impl Simulator {
                     branched = true;
                 }
             }
-            Instr::Cmp { dest, src } => self.do_cmp(*dest, *src),
-            Instr::CmpMem { dest, src } => {
-                self.do_cmp(*dest, *src);
-            }
+            Instr::Cmp { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
+            Instr::CmpMem { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
         }
 
         if !branched {
             self.curr_instr += 1;
         }
+
+        Ok(diffs)
     }
 
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     pub fn reset(&mut self) {
         self.registers = Registers::default();
         self.curr_instr = 0;
     }
+}
 
+impl Simulator {
     #[allow(clippy::cast_possible_truncation)]
     /// Gets the index the memory operand points to.
     /// Basically `lea`.
@@ -116,47 +143,63 @@ impl Simulator {
 
     /// Writes to the given memory operand's index.
     /// Returns `Err(())` if the address was out of bounds.
-    fn write_memory(&mut self, mem: Mem, value: u64) -> Result<(), ()> {
+    fn write_memory(&mut self, mem: Mem, value: u64) -> Result<MemDiff, SimulatorError> {
         let address = self.get_mem_index(mem);
         let bytes = value.to_le_bytes();
         match mem.size {
             Size::Byte => {
                 self.memory
                     .get_mut(address..address + 1)
-                    .ok_or(())?
+                    .ok_or(SimulatorError::InvalidMemAccess)?
                     .copy_from_slice(&bytes[0..1]);
             }
             Size::Word => self
                 .memory
                 .get_mut(address..address + 2)
-                .ok_or(())?
+                .ok_or(SimulatorError::InvalidMemAccess)?
                 .copy_from_slice(&bytes[0..2]),
             Size::Dword => self
                 .memory
                 .get_mut(address..address + 4)
-                .ok_or(())?
+                .ok_or(SimulatorError::InvalidMemAccess)?
                 .copy_from_slice(&bytes[0..4]),
             Size::Qword => self
                 .memory
                 .get_mut(address..address + 8)
-                .ok_or(())?
+                .ok_or(SimulatorError::InvalidMemAccess)?
                 .copy_from_slice(&bytes[0..8]),
         }
 
-        Ok(())
+        Ok(MemDiff {
+            address,
+            size: mem.size,
+            value,
+        })
     }
 
     /// Reads from the given memory operand's index.
     /// Returns a `Ok(u64)` with the unread bits zeroed or `Err(())` if the address was out of
     /// bounds.
-    fn read_memory(&self, mem: Mem) -> Result<u64, ()> {
+    fn read_memory(&self, mem: Mem) -> Result<u64, SimulatorError> {
         let address = self.get_mem_index(mem);
         let mut bytes = [0u8; 8];
         let source = match mem.size {
-            Size::Byte => self.memory.get(address..address + 1).ok_or(())?,
-            Size::Word => self.memory.get(address..address + 2).ok_or(())?,
-            Size::Dword => self.memory.get(address..address + 4).ok_or(())?,
-            Size::Qword => self.memory.get(address..address + 8).ok_or(())?,
+            Size::Byte => self
+                .memory
+                .get(address..address + 1)
+                .ok_or(SimulatorError::InvalidMemAccess)?,
+            Size::Word => self
+                .memory
+                .get(address..address + 2)
+                .ok_or(SimulatorError::InvalidMemAccess)?,
+            Size::Dword => self
+                .memory
+                .get(address..address + 4)
+                .ok_or(SimulatorError::InvalidMemAccess)?,
+            Size::Qword => self
+                .memory
+                .get(address..address + 8)
+                .ok_or(SimulatorError::InvalidMemAccess)?,
         };
         bytes[0..source.len()].copy_from_slice(source);
 
@@ -164,17 +207,26 @@ impl Simulator {
     }
 
     /// Writes to the given operand. Truncates `value` to the given size.
-    fn write(&mut self, dest: impl Into<RM>, value: u64) -> Result<(), ()> {
+    fn write(&mut self, dest: impl Into<RM>, value: u64) -> Result<Diff, SimulatorError> {
+        let diff;
         match dest.into() {
-            RM::Reg(reg) => self.registers.write(reg, value),
-            RM::Mem(mem) => self.write_memory(mem, value)?,
+            RM::Reg(reg) => {
+                diff = Diff::Reg(RegDiff {
+                    reg: reg.into(),
+                    value,
+                });
+                self.registers.write(reg, value);
+            }
+            RM::Mem(mem) => {
+                diff = Diff::Mem(self.write_memory(mem, value)?);
+            }
         }
 
-        Ok(())
+        Ok(diff)
     }
 
     /// Gets the value of the operand. Returns `Err(())` if memory access was out of bounds.
-    fn get_value(&self, src: impl Into<SimulatorOperand>) -> Result<u64, ()> {
+    fn get_value(&self, src: impl Into<SimulatorOperand>) -> Result<u64, SimulatorError> {
         match src.into() {
             SimulatorOperand::Imm(imm) => Ok(imm),
             SimulatorOperand::Reg(reg) => Ok(self.registers.read(reg)),
@@ -182,25 +234,26 @@ impl Simulator {
         }
     }
 
-    fn do_mov(&mut self, dest: impl Into<RM>, src: impl Into<SimulatorOperand>) {
-        let value = self
-            .get_value(src)
-            .expect("source memory access out of bounds");
+    fn do_mov(
+        &mut self,
+        dest: impl Into<RM>,
+        src: impl Into<SimulatorOperand>,
+    ) -> Result<Diff, SimulatorError> {
+        let value = self.get_value(src)?;
 
         self.write(dest, value)
-            .expect("destination memory access out of bounds");
     }
 
-    fn do_add_sub<Dest>(&mut self, dest: Dest, src: impl Into<SimulatorOperand>)
+    fn do_add_sub<Dest>(
+        &mut self,
+        dest: Dest,
+        src: impl Into<SimulatorOperand>,
+    ) -> Result<Diff, SimulatorError>
     where
         Dest: Into<RM> + Copy,
     {
-        let lhs = self
-            .get_value(dest)
-            .expect("destination memory access out of bounds");
-        let rhs = self
-            .get_value(src)
-            .expect("source memory access out of bounds");
+        let lhs = self.get_value(dest)?;
+        let rhs = self.get_value(src)?;
 
         let ((_, unsigned_overflow), (result, signed_overflow)) = match *self.current_instr() {
             Instr::Add { .. } => (
@@ -217,21 +270,21 @@ impl Simulator {
         self.registers.flags.set_of(signed_overflow);
         self.registers.flags.set_zf(result == 0);
         self.registers.flags.set_sf(result.signum() == -1);
+
         self.write(dest, result.cast_unsigned())
-            .expect("destination memory access out of bounds");
     }
 
-    fn do_xor<Dest>(&mut self, dest: Dest, src: impl Into<SimulatorOperand>)
+    fn do_xor<Dest>(
+        &mut self,
+        dest: Dest,
+        src: impl Into<SimulatorOperand>,
+    ) -> Result<Diff, SimulatorError>
     where
         Dest: Into<RM> + Copy,
     {
-        let lhs = self
-            .get_value(dest)
-            .expect("destination memory access out of bounds");
+        let lhs = self.get_value(dest)?;
 
-        let rhs = self
-            .get_value(src)
-            .expect("destination memory access out of bounds");
+        let rhs = self.get_value(src)?;
 
         let result = lhs ^ rhs;
 
@@ -241,20 +294,20 @@ impl Simulator {
         self.registers
             .flags
             .set_sf(result.cast_signed().signum() == -1);
+
         self.write(dest, result)
-            .expect("destination memory access out of bounds");
     }
 
-    fn do_cmp<Dest>(&mut self, dest: Dest, src: impl Into<SimulatorOperand>)
+    fn do_cmp<Dest>(
+        &mut self,
+        dest: Dest,
+        src: impl Into<SimulatorOperand>,
+    ) -> Result<Diff, SimulatorError>
     where
         Dest: Into<RM> + Copy,
     {
-        let lhs = self
-            .get_value(dest)
-            .expect("destination memory access out of bounds");
-        let rhs = self
-            .get_value(src)
-            .expect("destination memory access out of bounds");
+        let lhs = self.get_value(dest)?;
+        let rhs = self.get_value(src)?;
 
         let (_, unsigned_overflow) = lhs.overflowing_sub(rhs);
         let (result, signed_overflow) = lhs.cast_signed().overflowing_sub(rhs.cast_signed());
@@ -262,6 +315,11 @@ impl Simulator {
         self.registers.flags.set_of(signed_overflow);
         self.registers.flags.set_zf(result == 0);
         self.registers.flags.set_sf(result.signum() == -1);
+
+        Ok(Diff::Reg(RegDiff {
+            reg: DiffReg::Flags,
+            value: self.registers.flags.0,
+        }))
     }
 
     fn should_branch(&self, op: &Instr) -> bool {

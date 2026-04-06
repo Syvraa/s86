@@ -1,5 +1,8 @@
 use std::{fmt::Display, num::TryFromIntError};
 
+#[cfg(feature = "wasm-bindgen")]
+use wasm_bindgen::prelude::wasm_bindgen;
+
 use crate::tokens::Token;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -339,6 +342,7 @@ impl TryFrom<i128> for Scale {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 pub enum Size {
     Byte,
     Word,
