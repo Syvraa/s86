@@ -88,10 +88,8 @@ mod tests {
 
     #[test]
     fn fixing() {
-        let src = "
-    mov:
-    .add:
-";
+        let src = "mov:
+.add:";
         let mut tokens = Lexer::new(src).lex();
         fix_opcode_label_definitions(&mut tokens);
         assert_eq!(
@@ -99,6 +97,7 @@ mod tests {
             vec![
                 Token::Label(Label("mov".into())),
                 Token::Colon,
+                Token::Newline,
                 Token::Sublabel(Label(".add".into())),
                 Token::Colon
             ]

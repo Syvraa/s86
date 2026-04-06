@@ -81,4 +81,5 @@ pub enum Token {
     Word,
     Dword,
     Qword,
+    Newline,
 }

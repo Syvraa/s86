@@ -41,6 +41,7 @@ impl<'a> Parser<'a> {
                     // Consume the ":".
                     self.next();
                 }
+                Token::Newline => {}
                 _ => panic!("unexpected token"),
             }
         }
@@ -95,6 +96,11 @@ impl<'a> Parser<'a> {
                 self.instrs.push(Instr::Jle { dest });
             }
         }
+
+        assert!(
+            self.next().is_none_or(|t| *t == Token::Newline),
+            "expected newline after instruction"
+        );
     }
 
     // TODO: Rewrite this. I hate it. There's definitely a better way.
@@ -565,6 +571,13 @@ mod tests {
         let source = "
     mov al, -129
 ";
+        let _ = parse(source);
+    }
+
+    #[test]
+    #[should_panic(expected = "expected newline after instruction")]
+    fn no_newline_after_instruction() {
+        let source = "mov rax, 8 xor rax, rax";
         let _ = parse(source);
     }
 }

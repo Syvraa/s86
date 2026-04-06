@@ -21,6 +21,10 @@ impl Lexer {
 
         while !self.is_at_end() {
             match self.current() {
+                '\n' => {
+                    tokens.push(Token::Newline);
+                    self.pos += 1;
+                }
                 c if c.is_whitespace() => {
                     self.pos += 1;
                 }
@@ -61,7 +65,9 @@ impl Lexer {
                 '.' => {
                     let mut scanned = String::from(".");
                     self.pos += 1;
-                    assert!(self.current() != '.', "invalid sublabel name");
+                    if !self.is_at_end() {
+                        assert!(self.current() != '.', "invalid sublabel name");
+                    }
 
                     while !self.is_at_end() && self.current().is_alphanumeric() {
                         scanned.push(self.current());
@@ -267,10 +273,8 @@ mod tests {
 
     #[test]
     fn valid_instrs() {
-        let src = "
-    mov rax, rbx 
-    xor rbx, rax
-";
+        let src = "mov rax, rbx
+xor rbx, rax";
         let out = lex(src);
         assert_eq!(
             out,
@@ -279,6 +283,7 @@ mod tests {
                 Token::Reg(Reg::Qword(QwordReg::Rax)),
                 Token::Comma,
                 Token::Reg(Reg::Qword(QwordReg::Rbx)),
+                Token::Newline,
                 Token::Opcode(Opcode::Xor),
                 Token::Reg(Reg::Qword(QwordReg::Rbx)),
                 Token::Comma,
@@ -289,14 +294,12 @@ mod tests {
 
     #[test]
     fn label() {
-        let src = "
-        label:
-        xor rax, rax
-        .if:
-        add rax, 8
-        .:
-        jmp .
-    ";
+        let src = "label:
+xor rax, rax
+.if:
+add rax, 8
+.:
+jmp .";
 
         let out = lex(src);
         assert_eq!(
@@ -304,18 +307,23 @@ mod tests {
             vec![
                 Token::Label(Label("label".into())),
                 Token::Colon,
+                Token::Newline,
                 Token::Opcode(Opcode::Xor),
                 Token::Reg(Reg::Qword(QwordReg::Rax)),
                 Token::Comma,
                 Token::Reg(Reg::Qword(QwordReg::Rax)),
+                Token::Newline,
                 Token::Sublabel(Label(".if".into())),
                 Token::Colon,
+                Token::Newline,
                 Token::Opcode(Opcode::Add),
                 Token::Reg(Reg::Qword(QwordReg::Rax)),
                 Token::Comma,
                 Token::Number(8),
+                Token::Newline,
                 Token::Sublabel(Label(".".into())),
                 Token::Colon,
+                Token::Newline,
                 Token::Opcode(Opcode::Jmp),
                 Token::Sublabel(Label(".".into()))
             ]
@@ -323,10 +331,21 @@ mod tests {
     }
 
     #[test]
+    fn single_dot_at_end() {
+        let src = "jmp .";
+        let out = lex(src);
+        assert_eq!(
+            out,
+            vec![
+                Token::Opcode(Opcode::Jmp),
+                Token::Sublabel(Label(".".into())),
+            ]
+        );
+    }
+
+    #[test]
     fn label_with_number() {
-        let src = "
-    label1:
-";
+        let src = "label1:";
         let out = lex(src);
         assert_eq!(
             out,
@@ -336,10 +355,8 @@ mod tests {
 
     #[test]
     fn jmp() {
-        let src = "
-    jmp label
-    jmp .label
-    ";
+        let src = "jmp label
+jmp .label";
 
         let out = lex(src);
         assert_eq!(
@@ -347,6 +364,7 @@ mod tests {
             vec![
                 Token::Opcode(Opcode::Jmp),
                 Token::Label(Label("label".into())),
+                Token::Newline,
                 Token::Opcode(Opcode::Jmp),
                 Token::Sublabel(Label(".label".into()))
             ]
