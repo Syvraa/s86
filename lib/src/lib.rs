@@ -1,4 +1,5 @@
 #![deny(clippy::pedantic)]
+#![feature(try_trait_v2)]
 
 mod diff;
 mod instruction;
@@ -9,6 +10,7 @@ mod parser;
 mod registers;
 mod simulator;
 mod simulator_error;
+mod syntax_error;
 mod tokens;
 
 pub use crate::simulator::Simulator;

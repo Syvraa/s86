@@ -3,367 +3,580 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 use crate::{
     instruction::Instr,
     operands::{
-        BaseReg, Bits as _, Imm32, Index, IndexReg, Label, Mem, Operand, RI32, RIConversionError,
-        RM, RMI32, RMI64, Scale, Size,
+        BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandParseResult,
+        OperandWithImmError, RI32, RM, RMI32, RMI64, Scale, Size,
     },
-    tokens::{Opcode, Token},
+    syntax_error::{SyntaxError, SyntaxErrorKind},
+    tokens::{Opcode, Token, TokenType},
 };
 
 pub struct Parser<'a> {
     tokens: Peekable<Iter<'a, Token>>,
-    instrs: Vec<Instr>,
     labels: HashMap<Label, usize>,
+    errors: Vec<SyntaxError>,
     parent_label: Label,
+    line: usize,
 }
 
+// On error, we skip to the next newline and start parsing from there. If we reach the end, we
+// stop parsing.
+// The utility functions (`parse_operand`, `get_instr_idx` etc.) don't skip to the end of the line,
+// so you have more flexibility handling the error.
 impl<'a> Parser<'a> {
     pub fn new(tokens: Iter<'a, Token>, labels: HashMap<Label, usize>) -> Self {
         Self {
             tokens: tokens.peekable(),
-            instrs: Vec::new(),
             labels,
+            errors: Vec::new(),
             parent_label: Label(String::new()),
+            line: 1,
         }
     }
 
-    pub fn parse(mut self) -> Vec<Instr> {
+    pub fn parse(mut self) -> Result<Vec<Instr>, Vec<SyntaxError>> {
+        let mut instrs = Vec::new();
         while let Some(token) = self.next() {
-            match token {
-                Token::Opcode(op) => {
-                    self.parse_opcode(*op);
+            match token.ty {
+                TokenType::Opcode(op) => {
+                    match self.parse_opcode(op) {
+                        Some(instr) if self.peek().is_none_or(|t| t.ty == TokenType::Newline) => {
+                            instrs.push(instr);
+                        }
+                        // If no errors occured during parsing, but there is an unexpected token
+                        // after it.
+                        Some(_) => {
+                            self.errors.push(SyntaxError {
+                                line: token.line,
+                                error: SyntaxErrorKind::ExpectedNewline,
+                            });
+                            self.skip_to_newline_or_end();
+                        }
+                        None => {
+                            self.skip_to_newline_or_end();
+                        }
+                    }
                 }
-                Token::Label(label) => {
+                TokenType::Label(ref label) => {
                     self.parent_label.clone_from(label);
                     // Consume the ":".
                     self.next();
                 }
-                Token::Sublabel(_) => {
+                TokenType::Sublabel(_) => {
                     // Consume the ":".
                     self.next();
                 }
-                Token::Newline => {}
-                _ => panic!("unexpected token"),
+                TokenType::Newline => {}
+                _ => {
+                    self.errors.push(SyntaxError {
+                        line: token.line,
+                        error: SyntaxErrorKind::UnexpectedToken,
+                    });
+                    self.skip_to_newline_or_end();
+                }
             }
         }
 
-        self.instrs
+        if self.errors.is_empty() {
+            Ok(instrs)
+        } else {
+            Err(self.errors)
+        }
     }
 
-    fn parse_opcode(&mut self, op: Opcode) {
+    fn skip_to_newline_or_end(&mut self) {
+        while self.next().is_some_and(|t| t.ty != TokenType::Newline) {}
+    }
+
+    fn parse_opcode(&mut self, op: Opcode) -> Option<Instr> {
         type O = Opcode;
-        match op {
-            O::Mov => self.parse_mov(),
-            O::Add | O::Sub | O::Xor | O::Cmp => self.parse_binary_op(op),
-            O::Jmp => self.parse_jmp(),
+        let instr = match op {
+            O::Mov => self.parse_mov()?,
+            O::Add | O::Sub | O::Xor | O::Cmp => self.parse_binary_op(op)?,
+            O::Jmp => {
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jmp { dest }
+            }
             O::Je | O::Jz => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Je { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Je { dest }
             }
             O::Jne | O::Jnz => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jne { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jne { dest }
             }
             O::Ja | O::Jnbe => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Ja { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Ja { dest }
             }
             O::Jae | O::Jnb => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jae { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jae { dest }
             }
             O::Jb | O::Jnae => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jb { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jb { dest }
             }
             O::Jbe | O::Jna => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jbe { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jbe { dest }
             }
             O::Jg | O::Jnle => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jg { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jg { dest }
             }
             O::Jge | O::Jnl => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jge { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jge { dest }
             }
             O::Jl | O::Jnge => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jl { dest });
+                let dest = self.get_instr_idx()?;
+
+                Instr::Jl { dest }
             }
             O::Jle | O::Jng => {
-                let dest = self.get_instr_idx();
-                self.instrs.push(Instr::Jle { dest });
-            }
-        }
+                let dest = self.get_instr_idx()?;
 
-        assert!(
-            self.next().is_none_or(|t| *t == Token::Newline),
-            "expected newline after instruction"
-        );
+                Instr::Jle { dest }
+            }
+        };
+
+        Some(instr)
     }
 
-    // TODO: Rewrite this. I hate it. There's definitely a better way.
-    fn parse_memory(&mut self, size: Size) -> Mem {
-        assert!(
-            self.next() == Some(&Token::LBracket),
-            "expected memory operand"
-        );
+    // TODO: I KNOW CLIPPY (refactor)
+    #[allow(clippy::too_many_lines)]
+    fn parse_memory(&mut self, size: Size) -> Option<Mem> {
+        if self.next().is_none_or(|t| t.ty != TokenType::LBracket) {
+            return None;
+        }
+
         let mut base = None;
         let mut index = None;
         let mut disp = None;
 
         let mut positive = true;
+        let mut disp_overflow = false;
         while let Some(tok) = self.next() {
-            match tok {
-                Token::RBracket => {
+            match tok.ty {
+                TokenType::RBracket => {
                     if base.is_none() && index.is_none() && disp.is_none() {
-                        panic!("incomplete memory operand");
-                    } else {
-                        return Mem {
-                            base,
-                            index,
-                            disp,
-                            size,
-                        };
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::IncompleteMemoryOperand,
+                        });
+                        return None;
+                    } else if disp_overflow {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::DisplacementExceedsSignedDwordBounds,
+                        });
+                        return None;
                     }
+
+                    return Some(Mem {
+                        base,
+                        index,
+                        disp,
+                        size,
+                    });
                 }
                 // If we encounter a - or a +, then we start over, as we would fail the check at
                 // the end if it was something like + rax (we would consume the + and panic because
                 // the next token is not a +, a - or a ]).
-                Token::Minus => {
+                TokenType::Minus => {
                     positive = !positive;
                     continue;
                 }
-                Token::Plus => {
+                TokenType::Plus => {
                     continue;
                 }
-                Token::Reg(reg)
-                    if *self.peek().expect("premature end of token stream") != Token::Star =>
-                {
+                TokenType::Reg(reg) if self.peek().is_none_or(|t| t.ty != TokenType::Star) => {
                     if base.is_none() {
-                        base = Some(BaseReg::try_from(*reg).expect("invalid register for base"));
+                        if let Ok(base_reg) = BaseReg::try_from(reg) {
+                            base = Some(base_reg);
+                        } else {
+                            self.errors.push(SyntaxError {
+                                line: self.line,
+                                error: SyntaxErrorKind::InvalidBaseRegister,
+                            });
+                        }
                     } else {
-                        panic!("base register already given");
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::BaseRegisterAlreadyExists,
+                        });
                     }
                 }
-                Token::Reg(reg)
-                    if *self.peek().expect("premature end of token stream") == Token::Star =>
-                {
-                    assert!(index.is_none(), "index already given");
+                // We can call .next() here, since we already covered the case in which we don't
+                // have a star.
+                TokenType::Reg(reg) if self.next().is_some_and(|t| t.ty == TokenType::Star) => {
+                    if index.is_some() {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::IndexRegisterAlreadyExists,
+                        });
+                    }
 
-                    self.next();
-                    if let Some(Token::Number(imm)) = self.next() {
+                    if let Some(scale_factor_token) = self.next()
+                        && let TokenType::Number(imm) = scale_factor_token.ty
+                    {
+                        let Ok(index_reg) = IndexReg::try_from(reg) else {
+                            self.errors.push(SyntaxError {
+                                line: self.line,
+                                error: SyntaxErrorKind::RspCannotBeUsedAsIndexRegister,
+                            });
+                            continue;
+                        };
+
+                        let Ok(scale) = Scale::try_from(imm) else {
+                            self.errors.push(SyntaxError {
+                                line: self.line,
+                                error: SyntaxErrorKind::InvalidScaleFactor,
+                            });
+                            continue;
+                        };
+
                         index = Some(Index {
-                            index: IndexReg::try_from(*reg)
-                                .expect("rsp cannot be used for indexing"),
-                            scale: Scale::try_from(*imm)
-                                .expect("scale factor can only be 1, 2, 4 or 8"),
+                            index: index_reg,
+                            scale,
                         });
                     } else {
-                        panic!("expected scale factor after index register");
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ExpectedScaleFactor,
+                        });
+                        return None;
                     }
                 }
-                Token::Number(val) => {
-                    let (new_disp, overflow);
-                    if let Some(curr_disp) = disp {
-                        (new_disp, overflow) = curr_disp.0.cast_signed().overflowing_add(
-                            i32::try_from(*val).expect("displacement out of range"),
-                        );
-                    } else {
-                        (new_disp, overflow) = 0_i32.overflowing_add(
-                            i32::try_from(*val).expect("displacement out of range"),
-                        );
-                    }
+                TokenType::Number(val) => {
+                    let Ok(disp_value) = i32::try_from(val) else {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::DisplacementOutOfRange,
+                        });
+                        continue;
+                    };
 
-                    assert!(!overflow, "displacement exceeds signed dword bounds");
+                    let (new_disp, overflow) = disp
+                        .unwrap_or(Imm32(0))
+                        .0
+                        .cast_signed()
+                        .overflowing_add(disp_value);
+
+                    disp_overflow = overflow;
                     disp = Some(Imm32(new_disp.cast_unsigned()));
                 }
-                _ => panic!("unexpected token"),
+                _ => {
+                    self.errors.push(SyntaxError {
+                        line: self.line,
+                        error: SyntaxErrorKind::UnexpectedToken,
+                    });
+                    return None;
+                }
             }
 
-            let peeked = self.peek().expect("premature end of token stream");
-            assert!(
-                !(*peeked != Token::Plus && *peeked != Token::Minus && *peeked != Token::RBracket),
-                "expected +, - or ]"
-            );
+            if self.peek().is_none_or(|t| {
+                !matches!(
+                    t.ty,
+                    TokenType::Plus | TokenType::Minus | TokenType::RBracket
+                )
+            }) {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::ExpectedPlusOrMinusOrRBracket,
+                });
+                return None;
+            }
         }
 
-        panic!("unclosed memory operand");
+        self.errors.push(SyntaxError {
+            line: self.line,
+            error: SyntaxErrorKind::UnclosedMemoryOperand,
+        });
+        None
     }
 
     /// Expects a `-` to already be consumed.
-    fn parse_negative_number(&mut self) -> Operand {
+    fn parse_negative_number(&mut self) -> Option<Operand> {
         let mut positive = false;
-        while let Some(Token::Minus) = self.peek() {
+        while self.peek().is_some_and(|t| t.ty == TokenType::Minus) {
             self.next();
             positive = !positive;
         }
 
-        let Token::Number(num) = *self.consume() else {
-            panic!("expected number");
-        };
-
-        Operand::Imm(if positive { num } else { -num })
-    }
-
-    fn parse_operand(&mut self) -> Operand {
-        let tok = self.consume().clone();
-        match tok {
-            Token::Reg(reg) => Operand::Reg(reg),
-            Token::Byte | Token::Word | Token::Dword | Token::Qword => {
-                Operand::Mem(self.parse_memory(Size::try_from(tok).unwrap()))
-            }
-            Token::Number(num) => Operand::Imm(num),
-            Token::Minus => self.parse_negative_number(),
-            _ => panic!("unexpected token"),
+        if let TokenType::Number(num) = self.next()?.ty {
+            Some(Operand::Imm(if positive { num } else { -num }))
+        } else {
+            None
         }
     }
 
-    fn parse_jmp(&mut self) {
-        let label = match self.next().expect("expected label name") {
-            Token::Opcode(op) => op.as_str(),
-            Token::Label(Label(name)) => name,
-            Token::Sublabel(Label(name)) => &(self.parent_label.0.clone() + name),
-            _ => panic!("not a valid label name"),
+    fn parse_operand(&mut self) -> OperandParseResult {
+        let Some(tok) = self.next() else {
+            return OperandParseResult::Ok(None);
         };
 
-        let Some(instr_idx) = self.labels.get(&Label(label.to_string())).copied() else {
-            panic!("no label {label} found");
-        };
-
-        self.instrs.push(Instr::Jmp { dest: instr_idx });
-    }
-
-    fn get_instr_idx(&mut self) -> usize {
-        let label = match self.next().expect("expected label name") {
-            Token::Opcode(op) => op.as_str(),
-            Token::Label(Label(name)) => name,
-            Token::Sublabel(Label(name)) => &(self.parent_label.0.clone() + name),
-            _ => panic!("not a valid label name"),
-        };
-
-        let Some(instr_idx) = self.labels.get(&Label(label.to_string())).copied() else {
-            panic!("no label {label} found");
-        };
-
-        instr_idx
-    }
-
-    fn parse_mov(&mut self) {
-        let dest = RM::try_from(self.parse_operand()).expect("expected register or memory operand");
-        assert_eq!(self.next(), Some(&Token::Comma), "expected comma");
-
-        let src = self.parse_operand();
-        match src {
-            Operand::Reg(reg) => {
-                assert!(dest.size() == reg.size(), "operands are not the same size");
+        match tok.ty {
+            TokenType::Reg(reg) => OperandParseResult::Ok(Some(Operand::Reg(reg))),
+            TokenType::Byte | TokenType::Word | TokenType::Dword | TokenType::Qword => {
+                OperandParseResult::Ok(Some(Operand::Mem(
+                    match self.parse_memory(Size::try_from(tok.ty.clone()).unwrap()) {
+                        Some(mem) => mem,
+                        None => return OperandParseResult::ParsingError,
+                    },
+                )))
             }
-            Operand::Mem(mem) => {
-                assert!(dest.size() == mem.size, "operands are not the same size");
-            }
-            Operand::Imm(imm) => {
-                assert!(
-                    dest.size().bits() >= imm.bits(),
-                    "source does not fit into destination"
-                );
-            }
-        }
-
-        match dest {
-            RM::Reg(reg) => self.instrs.push(Instr::Mov {
-                dest: reg,
-                src: RMI64::try_from(src).expect("value out of range for qword"),
+            TokenType::Number(num) => OperandParseResult::Ok(Some(Operand::Imm(num))),
+            TokenType::Minus => OperandParseResult::Ok(match self.parse_negative_number() {
+                Some(num) => Some(num),
+                None => return OperandParseResult::ParsingError,
             }),
-            RM::Mem(mem) => self.instrs.push(Instr::MovMem {
+            _ => OperandParseResult::Ok(None),
+        }
+    }
+
+    fn get_instr_idx(&mut self) -> Option<usize> {
+        let Some(token) = self.next() else {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::ExpectedLabel,
+            });
+
+            return None;
+        };
+
+        let label = match &token.ty {
+            TokenType::Opcode(op) => Label(op.as_str().to_string()),
+            TokenType::Label(label) => label.clone(),
+            TokenType::Sublabel(Label(name)) => Label(self.parent_label.0.clone() + name),
+            _ => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::InvalidLabelName,
+                });
+
+                return None;
+            }
+        };
+
+        let Some(instr_idx) = self.labels.get(&label).copied() else {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::NoSuchLabel,
+            });
+
+            return None;
+        };
+
+        Some(instr_idx)
+    }
+
+    fn parse_mov(&mut self) -> Option<Instr> {
+        let Ok(dest) = RM::try_from(self.parse_operand()?) else {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::ExpectedRegisterOrMemory,
+            });
+            return None;
+        };
+
+        if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::ExpectedComma,
+            });
+        }
+
+        let src = self.parse_operand()?;
+        match src {
+            Some(Operand::Reg(reg)) if dest.size() != reg.size() => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::OperandSizeMismatch,
+                });
+            }
+            Some(Operand::Mem(mem)) if dest.size() != mem.size => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::OperandSizeMismatch,
+                });
+            }
+            Some(Operand::Imm(imm)) if dest.size().bits() < imm.bits() => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::SourceDoesNotFitIntoDestination,
+                });
+            }
+            // If the operand is wrong, we don't care if it fits, we let the conversions fail and
+            // return there.
+            _ => {}
+        }
+
+        let instr = match dest {
+            RM::Reg(reg) => Instr::Mov {
+                dest: reg,
+                src: match RMI64::try_from(src) {
+                    Ok(source) => source,
+                    Err(OperandWithImmError::WrongOperand) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ExpectedRegisterMemoryOrImmediate,
+                        });
+                        return None;
+                    }
+                    Err(OperandWithImmError::ImmediateOutOfRange) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ValueOutOfRangeForQword,
+                        });
+                        return None;
+                    }
+                },
+            },
+            RM::Mem(mem) => Instr::MovMem {
                 dest: mem,
                 src: match RI32::try_from(src) {
                     Ok(source) => source,
-                    Err(RIConversionError::NotRegOrImm) => {
-                        panic!("expected register or immediate")
+                    Err(OperandWithImmError::WrongOperand) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ExpectedRegisterOrImmediate,
+                        });
+                        return None;
                     }
-                    Err(RIConversionError::ValueOutOfRange) => {
-                        panic!("value out of range for dword")
+                    Err(OperandWithImmError::ImmediateOutOfRange) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ValueOutOfRangeForDword,
+                        });
+                        return None;
                     }
                 },
-            }),
-        }
-    }
-
-    fn parse_binary_op(&mut self, op: Opcode) {
-        type O = Opcode;
-        let dest = RM::try_from(self.parse_operand()).expect("expected register or memory operand");
-        assert_eq!(self.next(), Some(&Token::Comma), "expected comma");
-
-        let src = self.parse_operand();
-        match src {
-            Operand::Reg(reg) => {
-                assert!(dest.size() == reg.size(), "operands are not the same size");
-            }
-            Operand::Mem(mem) => {
-                assert!(dest.size() == mem.size, "operands are not the same size");
-            }
-            Operand::Imm(imm) => {
-                assert!(
-                    dest.size().bits() >= imm.bits(),
-                    "source does not fit into destination"
-                );
-            }
-        }
-        let instr = match dest {
-            RM::Reg(reg) => match op {
-                O::Add => Instr::Add {
-                    dest: reg,
-                    src: RMI32::try_from(src).expect("value out of range for dword"),
-                },
-                O::Sub => Instr::Sub {
-                    dest: reg,
-                    src: RMI32::try_from(src).expect("value out of range for dword"),
-                },
-                O::Xor => Instr::Xor {
-                    dest: reg,
-                    src: RMI32::try_from(src).expect("value out of range for dword"),
-                },
-                O::Cmp => Instr::Cmp {
-                    dest: reg,
-                    src: RMI32::try_from(src).expect("value out of range for dword"),
-                },
-                _ => unreachable!("you forgot to add a case in parse_opcode"),
-            },
-            RM::Mem(mem) => match op {
-                O::Add => Instr::AddMem {
-                    dest: mem,
-                    src: RI32::try_from(src).unwrap(),
-                },
-                O::Sub => Instr::SubMem {
-                    dest: mem,
-                    src: RI32::try_from(src).unwrap(),
-                },
-                O::Xor => Instr::XorMem {
-                    dest: mem,
-                    src: RI32::try_from(src).unwrap(),
-                },
-                O::Cmp => Instr::CmpMem {
-                    dest: mem,
-                    src: RI32::try_from(src).unwrap(),
-                },
-                _ => unreachable!("you forgot to add a case in parse_opcode"),
             },
         };
 
-        self.instrs.push(instr);
+        Some(instr)
+    }
+
+    fn parse_binary_op(&mut self, op: Opcode) -> Option<Instr> {
+        type O = Opcode;
+        let Ok(dest) = RM::try_from(self.parse_operand()?) else {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::ExpectedRegisterOrMemory,
+            });
+            return None;
+        };
+        if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::ExpectedComma,
+            });
+        }
+
+        let src = self.parse_operand()?;
+        match src {
+            Some(Operand::Reg(reg)) if dest.size() != reg.size() => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::OperandSizeMismatch,
+                });
+            }
+            Some(Operand::Mem(mem)) if dest.size() != mem.size => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::OperandSizeMismatch,
+                });
+            }
+            Some(Operand::Imm(imm)) if dest.size().bits() < imm.bits() => {
+                self.errors.push(SyntaxError {
+                    line: self.line,
+                    error: SyntaxErrorKind::SourceDoesNotFitIntoDestination,
+                });
+            }
+            // If the operand is wrong, we don't care if it fits, we let the conversions fail and
+            // return there.
+            _ => {}
+        }
+
+        // TODO: refactor
+        let instr = match dest {
+            RM::Reg(reg) => {
+                let src = match RMI32::try_from(src) {
+                    Ok(source) => source,
+                    Err(OperandWithImmError::WrongOperand) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ExpectedRegisterMemoryOrImmediate,
+                        });
+                        return None;
+                    }
+                    Err(OperandWithImmError::ImmediateOutOfRange) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ValueOutOfRangeForDword,
+                        });
+                        return None;
+                    }
+                };
+                match op {
+                    O::Add => Instr::Add { dest: reg, src },
+                    O::Sub => Instr::Sub { dest: reg, src },
+                    O::Xor => Instr::Xor { dest: reg, src },
+                    O::Cmp => Instr::Cmp { dest: reg, src },
+                    _ => unreachable!("you forgot to add a case in parse_opcode"),
+                }
+            }
+            RM::Mem(mem) => {
+                let src = match RI32::try_from(src) {
+                    Ok(source) => source,
+                    Err(OperandWithImmError::WrongOperand) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ExpectedRegisterOrImmediate,
+                        });
+                        return None;
+                    }
+                    Err(OperandWithImmError::ImmediateOutOfRange) => {
+                        self.errors.push(SyntaxError {
+                            line: self.line,
+                            error: SyntaxErrorKind::ValueOutOfRangeForDword,
+                        });
+                        return None;
+                    }
+                };
+                match op {
+                    O::Add => Instr::AddMem { dest: mem, src },
+                    O::Sub => Instr::SubMem { dest: mem, src },
+                    O::Xor => Instr::XorMem { dest: mem, src },
+                    O::Cmp => Instr::CmpMem { dest: mem, src },
+                    _ => unreachable!("you forgot to add a case in parse_opcode"),
+                }
+            }
+        };
+
+        Some(instr)
     }
 
     fn next(&mut self) -> Option<&'a Token> {
-        self.tokens.next()
+        self.tokens.next().inspect(|t| {
+            if t.ty == TokenType::Newline {
+                self.line += 1;
+            }
+        })
     }
 
     fn peek(&mut self) -> Option<&'a Token> {
         self.tokens.peek().copied()
-    }
-
-    fn consume(&mut self) -> &Token {
-        self.next().expect("premature end of input")
     }
 }
 
@@ -374,30 +587,23 @@ mod tests {
     use crate::label_parser::{LabelParser, fix_opcode_label_definitions};
     use crate::lexer::Lexer;
     use crate::operands::{
-        DwordIndexReg, DwordReg, Imm32, Imm64, IndexReg, QwordIndexReg, QwordReg, RMI64, Reg,
-        Scale, Size,
+        DwordReg, Imm32, Imm64, IndexReg, QwordIndexReg, QwordReg, RMI64, Reg, Scale, Size,
     };
 
-    struct ParseResult {
-        instrs: Vec<Instr>,
-        labels: HashMap<Label, usize>,
-    }
-
-    fn parse(source: &str) -> ParseResult {
+    fn parse(source: &str) -> Result<Vec<Instr>, Vec<SyntaxError>> {
         let lexer = Lexer::new(source);
-        let mut tokens = lexer.lex();
+        let mut tokens = lexer.lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
-        let labels = LabelParser::new(tokens.iter()).parse();
-        let parser = Parser::new(tokens.iter(), labels.clone());
-        let instrs = parser.parse();
+        let labels = LabelParser::new(tokens.iter()).parse().unwrap();
+        let parser = Parser::new(tokens.iter(), labels);
 
-        ParseResult { instrs, labels }
+        parser.parse()
     }
 
     #[test]
     fn single_mov() {
         let source = "mov rax, rbx";
-        let parsed = parse(source).instrs;
+        let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
             vec![Instr::Mov {
@@ -410,7 +616,7 @@ mod tests {
     #[test]
     fn single_binary_op() {
         let source = "add rax, 8";
-        let parsed = parse(source).instrs;
+        let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
             vec![Instr::Add {
@@ -427,7 +633,7 @@ mod tests {
         xor rax, rax
         sub rbx, rax
     ";
-        let parsed = parse(source).instrs;
+        let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
             vec![
@@ -448,10 +654,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "expected register")]
     fn invalid_operand() {
         let source = "add 8, rax";
-        let _ = parse(source).instrs;
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::ExpectedRegisterOrMemory
+            }]
+        );
     }
 
     #[test]
@@ -461,31 +674,38 @@ mod tests {
         jmp label
 ";
 
-        let parsed = parse(source);
-        assert_eq!(parsed.instrs, vec![Instr::Jmp { dest: 0 }]);
-        let mut expected_labels = HashMap::new();
-        expected_labels.insert(Label("label".into()), 0);
-        assert_eq!(parsed.labels, expected_labels);
+        let parsed = parse(source).unwrap();
+        assert_eq!(parsed, vec![Instr::Jmp { dest: 0 }]);
     }
 
     #[test]
-    #[should_panic(expected = "no label label found")]
     fn jmp_not_exists() {
-        let source = "
-    jmp label
-";
+        let source = "jmp label";
 
-        let _ = parse(source);
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::NoSuchLabel
+            }]
+        );
     }
 
     #[test]
-    #[should_panic(expected = "not a valid label name")]
     fn jmp_invalid_operand() {
-        let source = "
-    jmp 2dfa
-";
+        let source = "jmp 2dfa";
 
-        let _ = parse(source);
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::InvalidLabelName
+            }]
+        );
     }
 
     #[test]
@@ -494,9 +714,9 @@ mod tests {
     mov rax, -100
 ";
 
-        let parsed = parse(source);
+        let parsed = parse(source).unwrap();
         assert_eq!(
-            parsed.instrs,
+            parsed,
             vec![Instr::Mov {
                 dest: Reg::Qword(QwordReg::Rax),
                 src: RMI64::Imm(Imm64((-100_i64).cast_unsigned()))
@@ -505,12 +725,17 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "unexpected token")]
     fn double_colon_label() {
-        let source = "
-    label::
-";
-        let _ = parse(source);
+        let source = "label::";
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::UnexpectedToken
+            }]
+        );
     }
 
     #[test]
@@ -518,9 +743,9 @@ mod tests {
         let source = "
     mov qword [rsp], rax
 ";
-        let parsed = parse(source);
+        let parsed = parse(source).unwrap();
         assert_eq!(
-            parsed.instrs,
+            parsed,
             vec![Instr::MovMem {
                 dest: Mem {
                     base: Some(BaseReg::Qword(QwordReg::Rsp)),
@@ -538,9 +763,9 @@ mod tests {
         let source = "
     mov dword [rax*8], ebx
 ";
-        let parsed = parse(source);
+        let parsed = parse(source).unwrap();
         assert_eq!(
-            parsed.instrs,
+            parsed,
             vec![Instr::MovMem {
                 dest: Mem {
                     base: None,
@@ -557,27 +782,44 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "source does not fit into destination")]
-    fn size_not_equal() {
-        let source = "
-    mov byte [eax], 256
-";
-        let _ = parse(source);
+    fn does_not_fit() {
+        let source = "mov byte [eax], 256";
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::SourceDoesNotFitIntoDestination
+            }]
+        );
     }
 
     #[test]
-    #[should_panic(expected = "source does not fit into destination")]
     fn negative_does_not_fit() {
-        let source = "
-    mov al, -129
-";
-        let _ = parse(source);
+        let source = "mov al, -129";
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::SourceDoesNotFitIntoDestination
+            }]
+        );
     }
 
     #[test]
-    #[should_panic(expected = "expected newline after instruction")]
     fn no_newline_after_instruction() {
         let source = "mov rax, 8 xor rax, rax";
-        let _ = parse(source);
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::ExpectedNewline
+            }]
+        );
     }
 }

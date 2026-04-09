@@ -28,8 +28,8 @@ fn sign_extend() {
     mov rax, 2
     end:
 ";
-    let mut simulator = Simulator::new(source, 0);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 0).unwrap();
+    simulator.run().unwrap();
 
     assert_eq!(simulator.registers.rax, expected);
 }

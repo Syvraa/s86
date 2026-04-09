@@ -1,6 +1,10 @@
 use std::{collections::HashMap, iter::Peekable, slice::Iter};
 
-use crate::{operands::Label, tokens::Token};
+use crate::{
+    operands::Label,
+    syntax_error::{SyntaxError, SyntaxErrorKind},
+    tokens::{Token, TokenType},
+};
 
 pub struct LabelParser<'a> {
     tokens: Peekable<Iter<'a, Token>>,
@@ -19,44 +23,67 @@ impl<'a> LabelParser<'a> {
         }
     }
 
-    /// Gets all labels in the source text.
-    pub fn parse(mut self) -> HashMap<Label, usize> {
+    /// Gets all label definitions in the source text.
+    pub fn parse(mut self) -> Result<HashMap<Label, usize>, Vec<SyntaxError>> {
+        let mut errors = Vec::new();
         while let Some(token) = self.next() {
-            match token {
-                Token::Label(label) if self.peek() == Some(&Token::Colon) => {
-                    self.parse_label(label);
+            match &token.ty {
+                TokenType::Label(label)
+                    if self.peek().is_some_and(|t| t.ty == TokenType::Colon) =>
+                {
+                    if let Err(error) = self.insert_label(label, token.line) {
+                        errors.push(error);
+                    }
                 }
-                Token::Sublabel(label) if self.peek() == Some(&Token::Colon) => {
-                    self.parse_sublabel(label);
+                TokenType::Sublabel(label)
+                    if self.peek().is_some_and(|t| t.ty == TokenType::Colon) =>
+                {
+                    if let Err(error) = self.insert_sublabel(label, token.line) {
+                        errors.push(error);
+                    }
                 }
-                Token::Opcode(_) => self.current_instr_idx += 1,
+                TokenType::Opcode(_) => self.current_instr_idx += 1,
                 _ => {}
             }
         }
 
-        self.labels
+        if errors.is_empty() {
+            Ok(self.labels)
+        } else {
+            Err(errors)
+        }
     }
 
-    fn parse_label(&mut self, label: &Label) {
+    fn insert_label(&mut self, label: &Label, line: usize) -> Result<(), SyntaxError> {
         self.parent_label.clone_from(label);
         if let Some(idx) = self.labels.get(label)
             && *idx != self.current_instr_idx
         {
-            panic!("inconsistent redefinition of {}", label.0);
+            return Err(SyntaxError {
+                line,
+                error: SyntaxErrorKind::InconsistentLabelRedefinition,
+            });
         }
-
         self.labels.insert(label.clone(), self.current_instr_idx);
+
+        Ok(())
     }
 
-    fn parse_sublabel(&mut self, label: &Label) {
-        let label = Label(self.parent_label.0.clone() + &label.0);
+    fn insert_sublabel(&mut self, label: &Label, line: usize) -> Result<(), SyntaxError> {
+        let label_text = self.parent_label.0.clone() + &label.0;
         if let Some(idx) = self.labels.get(&label)
             && *idx != self.current_instr_idx
         {
-            panic!("inconsistent redefinition of {}", label.0);
+            return Err(SyntaxError {
+                line,
+                error: SyntaxErrorKind::InconsistentLabelRedefinition,
+            });
         }
 
-        self.labels.insert(label.clone(), self.current_instr_idx);
+        self.labels
+            .insert(Label(label_text), self.current_instr_idx);
+
+        Ok(())
     }
 
     fn next(&mut self) -> Option<&'a Token> {
@@ -71,9 +98,17 @@ impl<'a> LabelParser<'a> {
 /// By default, labels like mov: are parsed as an opcode. This function makes those into labels.
 pub fn fix_opcode_label_definitions(tokens: &mut [Token]) {
     for i in 0..tokens.len() {
-        match tokens[i] {
-            Token::Opcode(op) if tokens.get(i + 1) == Some(&Token::Colon) => {
-                tokens[i] = Token::Label(Label(op.as_str().to_string()));
+        let token = &tokens[i];
+        match token.ty {
+            TokenType::Opcode(op)
+                if tokens.get(i + 1).is_some_and(|t| t.ty == TokenType::Colon) =>
+            {
+                tokens[i] = Token {
+                    start: token.start,
+                    end: token.end,
+                    line: token.line,
+                    ty: TokenType::Label(Label(op.as_str().to_string())),
+                };
             }
             _ => {}
         }
@@ -90,16 +125,41 @@ mod tests {
     fn fixing() {
         let src = "mov:
 .add:";
-        let mut tokens = Lexer::new(src).lex();
+        let mut tokens = Lexer::new(src).lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
         assert_eq!(
             tokens,
             vec![
-                Token::Label(Label("mov".into())),
-                Token::Colon,
-                Token::Newline,
-                Token::Sublabel(Label(".add".into())),
-                Token::Colon
+                Token {
+                    start: 0,
+                    end: 2,
+                    line: 1,
+                    ty: TokenType::Label(Label("mov".into()))
+                },
+                Token {
+                    start: 3,
+                    end: 3,
+                    line: 1,
+                    ty: TokenType::Colon
+                },
+                Token {
+                    start: 4,
+                    end: 4,
+                    line: 1,
+                    ty: TokenType::Newline
+                },
+                Token {
+                    start: 5,
+                    end: 8,
+                    line: 2,
+                    ty: TokenType::Sublabel(Label(".add".into()))
+                },
+                Token {
+                    start: 9,
+                    end: 9,
+                    line: 2,
+                    ty: TokenType::Colon
+                },
             ]
         );
     }
@@ -113,9 +173,9 @@ mod tests {
         xor rax, rax
 ";
 
-        let mut tokens = Lexer::new(src).lex();
+        let mut tokens = Lexer::new(src).lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
-        let result = LabelParser::new(tokens.iter()).parse();
+        let result = LabelParser::new(tokens.iter()).parse().unwrap();
         let mut expected = HashMap::new();
         expected.insert(Label("label".into()), 0);
         expected.insert(Label("label.sub".into()), 0);
@@ -129,9 +189,9 @@ mod tests {
     add:
         xor rax, rax
 ";
-        let mut tokens = Lexer::new(src).lex();
+        let mut tokens = Lexer::new(src).lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
-        let result = LabelParser::new(tokens.iter()).parse();
+        let result = LabelParser::new(tokens.iter()).parse().unwrap();
         let mut expected = HashMap::new();
         expected.insert(Label("sub".into()), 0);
         expected.insert(Label("add".into()), 0);
@@ -148,9 +208,9 @@ mod tests {
     label2:
 ";
 
-        let mut tokens = Lexer::new(src).lex();
+        let mut tokens = Lexer::new(src).lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
-        let result = LabelParser::new(tokens.iter()).parse();
+        let result = LabelParser::new(tokens.iter()).parse().unwrap();
         let mut expected = HashMap::new();
         expected.insert(Label("label".into()), 0);
         expected.insert(Label("label.sub".into()), 1);
@@ -159,18 +219,23 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "inconsistent redefinition of label")]
     fn inconsistent_redefinition() {
-        let src = "
-    label:
-        jmp .sub
-    label:
-        jmp label
+        let src = "label:
+jmp .sub
+label:
+jmp label
 ";
 
-        let mut tokens = Lexer::new(src).lex();
+        let mut tokens = Lexer::new(src).lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
-        _ = LabelParser::new(tokens.iter()).parse();
+        let errors = LabelParser::new(tokens.iter()).parse().unwrap_err();
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 3,
+                error: SyntaxErrorKind::InconsistentLabelRedefinition
+            }]
+        );
     }
 
     #[test]
@@ -179,9 +244,9 @@ mod tests {
     .label:
 ";
 
-        let mut tokens = Lexer::new(src).lex();
+        let mut tokens = Lexer::new(src).lex().unwrap();
         fix_opcode_label_definitions(&mut tokens);
-        let result = LabelParser::new(tokens.iter()).parse();
+        let result = LabelParser::new(tokens.iter()).parse().unwrap();
         let mut expected = HashMap::new();
         expected.insert(Label(".label".into()), 0);
         assert_eq!(expected, result);

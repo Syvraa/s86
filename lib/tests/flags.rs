@@ -17,9 +17,9 @@ fn add_max() {
     let source = "
     add rax, 1
 ";
-    let mut simulator = Simulator::new(source, 0);
+    let mut simulator = Simulator::new(source, 0).unwrap();
     simulator.registers.rax = input;
-    simulator.run();
+    simulator.run().unwrap();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
 
@@ -38,9 +38,9 @@ fn sub_max() {
     let source = "
     sub rax, 1
 ";
-    let mut simulator = Simulator::new(source, 0);
+    let mut simulator = Simulator::new(source, 0).unwrap();
     simulator.registers.rax = input;
-    simulator.run();
+    simulator.run().unwrap();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
 
@@ -59,9 +59,9 @@ fn add_min() {
     let source = "
     add rax, 1
 ";
-    let mut simulator = Simulator::new(source, 0);
+    let mut simulator = Simulator::new(source, 0).unwrap();
     simulator.registers.rax = input;
-    simulator.run();
+    simulator.run().unwrap();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
 
@@ -80,9 +80,9 @@ fn sub_min() {
     let source = "
     sub rax, 1
 ";
-    let mut simulator = Simulator::new(source, 0);
+    let mut simulator = Simulator::new(source, 0).unwrap();
     simulator.registers.rax = input;
-    simulator.run();
+    simulator.run().unwrap();
     assert_eq!(simulator.registers.flags().0, extract_flags(expected));
 }
 

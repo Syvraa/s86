@@ -64,7 +64,15 @@ impl Opcode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Token {
+pub struct Token {
+    pub start: usize,
+    pub end: usize,
+    pub line: usize,
+    pub ty: TokenType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenType {
     Opcode(Opcode),
     Reg(Reg),
     Number(i128),

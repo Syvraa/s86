@@ -5,8 +5,8 @@ fn read_dword() {
     let source = "
     mov rax, qword [0]
 ";
-    let mut simulator = Simulator::new(source, 16);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 16).unwrap();
+    simulator.run().unwrap();
 
     assert_eq!(simulator.registers.rax, 0);
 }
@@ -17,8 +17,8 @@ fn write_byte() {
     mov byte [1], 8
     mov ah, byte [1]
 ";
-    let mut simulator = Simulator::new(source, 16);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 16).unwrap();
+    simulator.run().unwrap();
 
     assert_eq!(simulator.registers.rax, 8 << 8);
 }
@@ -29,8 +29,8 @@ fn write_dword() {
     mov dword [1], 8
     mov eax, dword [1]
 ";
-    let mut simulator = Simulator::new(source, 16);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 16).unwrap();
+    simulator.run().unwrap();
 
     assert_eq!(simulator.registers.rax, 8);
 }
@@ -42,8 +42,8 @@ fn dynamic_address() {
     mov qword [rax*8], 16
     mov rbx, qword [rax*8]
 ";
-    let mut simulator = Simulator::new(source, 16);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 16).unwrap();
+    simulator.run().unwrap();
 
     assert_eq!(simulator.registers.rbx, 16);
 }
@@ -54,8 +54,8 @@ fn offset() {
     mov byte [1+2], 3
     mov al, byte [1+2]
 ";
-    let mut simulator = Simulator::new(source, 16);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 16).unwrap();
+    simulator.run().unwrap();
 
     assert_eq!(simulator.registers.rax, 3);
 }

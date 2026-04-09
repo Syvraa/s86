@@ -21,9 +21,9 @@ fn jmp() {
     label:
     mov rax, 9
 ";
-    let mut simulator = Simulator::new(source, 0);
+    let mut simulator = Simulator::new(source, 0).unwrap();
     simulator.registers.rax = 10;
-    simulator.run();
+    simulator.run().unwrap();
     assert_eq!(simulator.registers.rax, expected);
 }
 
@@ -36,7 +36,7 @@ fn jmp_sublabel() {
     .sub:
     mov rax, 9
 ";
-    let mut simulator = Simulator::new(source, 0);
-    simulator.run();
+    let mut simulator = Simulator::new(source, 0).unwrap();
+    simulator.run().unwrap();
     assert_eq!(simulator.registers.rax, 9);
 }

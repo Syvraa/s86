@@ -1,9 +1,13 @@
-use std::{fmt::Display, num::TryFromIntError};
+use std::{
+    convert::Infallible,
+    num::TryFromIntError,
+    ops::{FromResidual, Try},
+};
 
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::tokens::Token;
+use crate::tokens::TokenType;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Imm32(pub u32);
@@ -164,6 +168,7 @@ impl From<IndexReg> for Reg {
 
 impl TryFrom<Operand> for Reg {
     type Error = ();
+
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(reg),
@@ -256,6 +261,7 @@ impl From<DwordIndexReg> for DwordReg {
 
 impl TryFrom<QwordReg> for QwordIndexReg {
     type Error = ();
+
     fn try_from(value: QwordReg) -> Result<Self, Self::Error> {
         match value {
             QwordReg::Rax => Ok(Self::Rax),
@@ -280,6 +286,7 @@ impl TryFrom<QwordReg> for QwordIndexReg {
 
 impl TryFrom<DwordReg> for DwordIndexReg {
     type Error = ();
+
     fn try_from(value: DwordReg) -> Result<Self, Self::Error> {
         match value {
             DwordReg::Eax => Ok(Self::Eax),
@@ -311,6 +318,7 @@ pub enum IndexReg {
 
 impl TryFrom<Reg> for IndexReg {
     type Error = ();
+
     fn try_from(value: Reg) -> Result<Self, Self::Error> {
         match value {
             Reg::Qword(reg) => Ok(Self::Qword(QwordIndexReg::try_from(reg)?)),
@@ -330,6 +338,7 @@ pub enum Scale {
 
 impl TryFrom<i128> for Scale {
     type Error = ();
+
     fn try_from(value: i128) -> Result<Self, Self::Error> {
         match value {
             1 => Ok(Self::One),
@@ -362,14 +371,15 @@ impl Bits for Size {
     }
 }
 
-impl TryFrom<Token> for Size {
+impl TryFrom<TokenType> for Size {
     type Error = ();
-    fn try_from(value: Token) -> Result<Self, Self::Error> {
+
+    fn try_from(value: TokenType) -> Result<Self, Self::Error> {
         match value {
-            Token::Byte => Ok(Self::Byte),
-            Token::Word => Ok(Self::Word),
-            Token::Dword => Ok(Self::Dword),
-            Token::Qword => Ok(Self::Qword),
+            TokenType::Byte => Ok(Self::Byte),
+            TokenType::Word => Ok(Self::Word),
+            TokenType::Dword => Ok(Self::Dword),
+            TokenType::Qword => Ok(Self::Qword),
             _ => Err(()),
         }
     }
@@ -398,6 +408,7 @@ impl From<BaseReg> for Reg {
 
 impl TryFrom<Reg> for BaseReg {
     type Error = ();
+
     fn try_from(value: Reg) -> Result<Self, Self::Error> {
         match value {
             Reg::Qword(reg) => Ok(Self::Qword(reg)),
@@ -415,6 +426,17 @@ pub struct Mem {
     pub size: Size,
 }
 
+pub enum OperandWithImmError {
+    WrongOperand,
+    ImmediateOutOfRange,
+}
+
+impl From<TryFromIntError> for OperandWithImmError {
+    fn from(_: TryFromIntError) -> Self {
+        Self::ImmediateOutOfRange
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RMI32 {
     Reg(Reg),
@@ -424,11 +446,23 @@ pub enum RMI32 {
 
 impl TryFrom<Operand> for RMI32 {
     type Error = TryFromIntError;
+
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Mem(mem) => Ok(Self::Mem(mem)),
             Operand::Imm(imm) => Ok(Self::Imm(Imm32::try_from(imm)?)),
+        }
+    }
+}
+
+impl TryFrom<Option<Operand>> for RMI32 {
+    type Error = OperandWithImmError;
+
+    fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
+        match value {
+            Some(operand) => Ok(Self::try_from(operand)?),
+            None => Err(OperandWithImmError::ImmediateOutOfRange),
         }
     }
 }
@@ -442,11 +476,23 @@ pub enum RMI64 {
 
 impl TryFrom<Operand> for RMI64 {
     type Error = TryFromIntError;
+
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Mem(mem) => Ok(Self::Mem(mem)),
             Operand::Imm(imm) => Ok(Self::Imm(Imm64::try_from(imm)?)),
+        }
+    }
+}
+
+impl TryFrom<Option<Operand>> for RMI64 {
+    type Error = OperandWithImmError;
+
+    fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
+        match value {
+            Some(operand) => Ok(Self::try_from(operand)?),
+            None => Err(OperandWithImmError::ImmediateOutOfRange),
         }
     }
 }
@@ -480,11 +526,24 @@ impl From<Mem> for RM {
 
 impl TryFrom<Operand> for RM {
     type Error = ();
+
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Mem(mem) => Ok(Self::Mem(mem)),
             Operand::Imm(_) => Err(()),
+        }
+    }
+}
+
+impl TryFrom<Option<Operand>> for RM {
+    type Error = ();
+
+    fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
+        match value {
+            Some(Operand::Reg(reg)) => Ok(Self::Reg(reg)),
+            Some(Operand::Mem(mem)) => Ok(Self::Mem(mem)),
+            _ => Err(()),
         }
     }
 }
@@ -555,40 +614,70 @@ pub enum Operand {
     Imm(i128),
 }
 
+/// Contains `Ok(Some(Operand))` if parsing was successful.
+/// Contains `Ok(None)` if the parsed token was not a valid `Operand` (or there was no token
+/// remaining).
+/// Contains `ParsingError` if an error occured during parsing (for example, a memory operand or a
+/// negative number could not be parsed). In that case, the error was already pushed to `self.errors`,
+/// so you should just use `?` to return None.
+// I know this is a really weird type but this was the most convenient way I could come up for
+// having 2 error states while making the api convenient (just use ? if there is an error, nothing
+// more convenient).
+pub enum OperandParseResult {
+    Ok(Option<Operand>),
+    ParsingError,
+}
+
+impl FromResidual for OperandParseResult {
+    fn from_residual(_: <Self as Try>::Residual) -> Self {
+        Self::ParsingError
+    }
+}
+
+impl Try for OperandParseResult {
+    type Output = Option<Operand>;
+    // Basically, this can only be None.
+    // TODO: Change this to ! once it is stabilized so it looks prettier.
+    type Residual = Option<Infallible>;
+
+    fn from_output(output: Self::Output) -> Self {
+        Self::Ok(output)
+    }
+
+    fn branch(self) -> std::ops::ControlFlow<Self::Residual, Self::Output> {
+        match self {
+            Self::Ok(value) => std::ops::ControlFlow::Continue(value),
+            Self::ParsingError => std::ops::ControlFlow::Break(None),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RI32 {
     Reg(Reg),
     Imm(Imm32),
 }
 
-#[derive(Debug)]
-pub enum RIConversionError {
-    NotRegOrImm,
-    ValueOutOfRange,
-}
-
-impl Display for RIConversionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotRegOrImm => write!(f, "expected register or immediate"),
-            Self::ValueOutOfRange => write!(f, "value out of range for dword"),
-        }
-    }
-}
-
-impl From<TryFromIntError> for RIConversionError {
-    fn from(_value: TryFromIntError) -> Self {
-        Self::ValueOutOfRange
-    }
-}
-
 impl TryFrom<Operand> for RI32 {
-    type Error = RIConversionError;
+    type Error = OperandWithImmError;
+
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Imm(imm) => Ok(Self::Imm(Imm32::try_from(imm)?)),
-            Operand::Mem(_) => Err(RIConversionError::NotRegOrImm),
+            Operand::Mem(_) => Err(OperandWithImmError::WrongOperand),
+        }
+    }
+}
+
+impl TryFrom<Option<Operand>> for RI32 {
+    type Error = OperandWithImmError;
+
+    fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
+        match value {
+            Some(Operand::Reg(reg)) => Ok(Self::Reg(reg)),
+            Some(Operand::Imm(imm)) => Ok(Self::Imm(Imm32::try_from(imm)?)),
+            _ => Err(OperandWithImmError::WrongOperand),
         }
     }
 }

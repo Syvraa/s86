@@ -10,6 +10,7 @@ use crate::{
     parser::Parser,
     registers::Registers,
     simulator_error::SimulatorError,
+    syntax_error::SyntaxError,
 };
 
 /// Memory is stored in little endian format.
@@ -34,13 +35,17 @@ impl Simulator {
         self.memory.clone().into_boxed_slice()
     }
 
-    #[must_use]
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen(constructor))]
-    pub fn new(source: &str, mem_size: usize) -> Simulator {
-        let mut tokens = Lexer::new(source).lex();
+    /// Creates a new Simulator instance from the specified string of instructions and with the
+    /// specified amount of memory (in bytes).
+    ///
+    /// # Errors
+    /// Returns `Err(Vec<SyntaxError>)` with all the errors that occured during lexing/parsing.
+    pub fn new(source: &str, mem_size: usize) -> Result<Simulator, Vec<SyntaxError>> {
+        let mut tokens = Lexer::new(source).lex()?;
         fix_opcode_label_definitions(&mut tokens);
-        let labels = LabelParser::new(tokens.iter()).parse();
-        let parsed = Parser::new(tokens.iter(), labels).parse();
+        let labels = LabelParser::new(tokens.iter()).parse()?;
+        let parsed = Parser::new(tokens.iter(), labels).parse()?;
 
         let memory = vec![0; mem_size];
 
@@ -50,12 +55,12 @@ impl Simulator {
             ..Registers::default()
         };
 
-        Self {
+        Ok(Self {
             registers,
             memory,
             instrs: parsed,
             curr_instr: 0,
-        }
+        })
     }
 
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
