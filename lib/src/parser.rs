@@ -3,8 +3,8 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 use crate::{
     instruction::Instr,
     operands::{
-        BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandParseResult,
-        OperandWithImmError, RI32, RM, RMI32, RMI64, Scale, Size,
+        BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandConversionError,
+        OperandParseResult, RI32, RM, RMI32, RMI64, Scale, Size,
     },
     syntax_error::{SyntaxError, SyntaxErrorKind},
     tokens::{Opcode, Token, TokenType},
@@ -16,6 +16,20 @@ pub struct Parser<'a> {
     errors: Vec<SyntaxError>,
     parent_label: Label,
     line: usize,
+}
+
+/// `try_convert!`(`self`, type, source)
+/// Returns the successfully converted type or returns from the function with `None`.
+macro_rules! try_convert {
+    ($self:expr, $ty:ty, $src:expr) => {
+        match <$ty>::try_from($src) {
+            Ok(result) => result,
+            Err(err) => {
+                $self.push_error(err);
+                return None;
+            }
+        }
+    };
 }
 
 // On error, we skip to the next newline and start parsing from there. If we reach the end, we
@@ -381,19 +395,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_mov(&mut self) -> Option<Instr> {
-        let Ok(dest) = RM::try_from(self.parse_operand()?) else {
-            self.errors.push(SyntaxError {
-                line: self.line,
-                error: SyntaxErrorKind::ExpectedRegisterOrMemory,
-            });
-            return None;
-        };
+        let dest = try_convert!(self, RM, self.parse_operand()?);
 
         if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
             self.errors.push(SyntaxError {
                 line: self.line,
                 error: SyntaxErrorKind::ExpectedComma,
             });
+            return None;
         }
 
         let src = self.parse_operand()?;
@@ -424,43 +433,11 @@ impl<'a> Parser<'a> {
         let instr = match dest {
             RM::Reg(reg) => Instr::Mov {
                 dest: reg,
-                src: match RMI64::try_from(src) {
-                    Ok(source) => source,
-                    Err(OperandWithImmError::WrongOperand) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ExpectedRegisterMemoryOrImmediate,
-                        });
-                        return None;
-                    }
-                    Err(OperandWithImmError::ImmediateOutOfRange) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ValueOutOfRangeForQword,
-                        });
-                        return None;
-                    }
-                },
+                src: try_convert!(self, RMI64, src),
             },
             RM::Mem(mem) => Instr::MovMem {
                 dest: mem,
-                src: match RI32::try_from(src) {
-                    Ok(source) => source,
-                    Err(OperandWithImmError::WrongOperand) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ExpectedRegisterOrImmediate,
-                        });
-                        return None;
-                    }
-                    Err(OperandWithImmError::ImmediateOutOfRange) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ValueOutOfRangeForDword,
-                        });
-                        return None;
-                    }
-                },
+                src: try_convert!(self, RI32, src),
             },
         };
 
@@ -469,18 +446,13 @@ impl<'a> Parser<'a> {
 
     fn parse_binary_op(&mut self, op: Opcode) -> Option<Instr> {
         type O = Opcode;
-        let Ok(dest) = RM::try_from(self.parse_operand()?) else {
-            self.errors.push(SyntaxError {
-                line: self.line,
-                error: SyntaxErrorKind::ExpectedRegisterOrMemory,
-            });
-            return None;
-        };
+        let dest = try_convert!(self, RM, self.parse_operand()?);
         if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
             self.errors.push(SyntaxError {
                 line: self.line,
                 error: SyntaxErrorKind::ExpectedComma,
             });
+            return None;
         }
 
         let src = self.parse_operand()?;
@@ -511,23 +483,7 @@ impl<'a> Parser<'a> {
         // TODO: refactor
         let instr = match dest {
             RM::Reg(reg) => {
-                let src = match RMI32::try_from(src) {
-                    Ok(source) => source,
-                    Err(OperandWithImmError::WrongOperand) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ExpectedRegisterMemoryOrImmediate,
-                        });
-                        return None;
-                    }
-                    Err(OperandWithImmError::ImmediateOutOfRange) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ValueOutOfRangeForDword,
-                        });
-                        return None;
-                    }
-                };
+                let src = try_convert!(self, RMI32, src);
                 match op {
                     O::Add => Instr::Add { dest: reg, src },
                     O::Sub => Instr::Sub { dest: reg, src },
@@ -537,23 +493,7 @@ impl<'a> Parser<'a> {
                 }
             }
             RM::Mem(mem) => {
-                let src = match RI32::try_from(src) {
-                    Ok(source) => source,
-                    Err(OperandWithImmError::WrongOperand) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ExpectedRegisterOrImmediate,
-                        });
-                        return None;
-                    }
-                    Err(OperandWithImmError::ImmediateOutOfRange) => {
-                        self.errors.push(SyntaxError {
-                            line: self.line,
-                            error: SyntaxErrorKind::ValueOutOfRangeForDword,
-                        });
-                        return None;
-                    }
-                };
+                let src = try_convert!(self, RI32, src);
                 match op {
                     O::Add => Instr::AddMem { dest: mem, src },
                     O::Sub => Instr::SubMem { dest: mem, src },
@@ -565,6 +505,13 @@ impl<'a> Parser<'a> {
         };
 
         Some(instr)
+    }
+
+    fn push_error(&mut self, error_kind: impl Into<SyntaxErrorKind>) {
+        self.errors.push(SyntaxError {
+            line: self.line,
+            error: error_kind.into(),
+        });
     }
 
     fn next(&mut self) -> Option<&'a Token> {
@@ -655,15 +602,27 @@ mod tests {
 
     #[test]
     fn invalid_operand() {
-        let source = "add 8, rax";
+        let source = "add 8, rax
+mov dword [0], [0]
+mov rax, reqrewq";
         let errors = parse(source).unwrap_err();
 
         assert_eq!(
             errors,
-            vec![SyntaxError {
-                line: 1,
-                error: SyntaxErrorKind::ExpectedRegisterOrMemory
-            }]
+            vec![
+                SyntaxError {
+                    line: 1,
+                    error: SyntaxErrorKind::InvalidOperands
+                },
+                SyntaxError {
+                    line: 2,
+                    error: SyntaxErrorKind::InvalidOperands
+                },
+                SyntaxError {
+                    line: 3,
+                    error: SyntaxErrorKind::InvalidOperands
+                }
+            ]
         );
     }
 

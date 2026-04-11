@@ -167,12 +167,12 @@ impl From<IndexReg> for Reg {
 }
 
 impl TryFrom<Operand> for Reg {
-    type Error = ();
+    type Error = OperandConversionError;
 
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(reg),
-            _ => Err(()),
+            _ => Err(OperandConversionError::WrongOperand),
         }
     }
 }
@@ -426,15 +426,11 @@ pub struct Mem {
     pub size: Size,
 }
 
-pub enum OperandWithImmError {
+#[derive(Clone, Copy)]
+pub enum OperandConversionError {
     WrongOperand,
-    ImmediateOutOfRange,
-}
-
-impl From<TryFromIntError> for OperandWithImmError {
-    fn from(_: TryFromIntError) -> Self {
-        Self::ImmediateOutOfRange
-    }
+    ImmediateOutOfRangeForQword,
+    ImmediateOutOfRangeForDword,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -445,24 +441,28 @@ pub enum RMI32 {
 }
 
 impl TryFrom<Operand> for RMI32 {
-    type Error = TryFromIntError;
+    type Error = OperandConversionError;
 
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Mem(mem) => Ok(Self::Mem(mem)),
-            Operand::Imm(imm) => Ok(Self::Imm(Imm32::try_from(imm)?)),
+            Operand::Imm(imm) => {
+                Ok(Self::Imm(Imm32::try_from(imm).map_err(|_| {
+                    OperandConversionError::ImmediateOutOfRangeForDword
+                })?))
+            }
         }
     }
 }
 
 impl TryFrom<Option<Operand>> for RMI32 {
-    type Error = OperandWithImmError;
+    type Error = OperandConversionError;
 
     fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
         match value {
             Some(operand) => Ok(Self::try_from(operand)?),
-            None => Err(OperandWithImmError::ImmediateOutOfRange),
+            None => Err(OperandConversionError::WrongOperand),
         }
     }
 }
@@ -475,24 +475,28 @@ pub enum RMI64 {
 }
 
 impl TryFrom<Operand> for RMI64 {
-    type Error = TryFromIntError;
+    type Error = OperandConversionError;
 
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Mem(mem) => Ok(Self::Mem(mem)),
-            Operand::Imm(imm) => Ok(Self::Imm(Imm64::try_from(imm)?)),
+            Operand::Imm(imm) => {
+                Ok(Self::Imm(Imm64::try_from(imm).map_err(|_| {
+                    OperandConversionError::ImmediateOutOfRangeForQword
+                })?))
+            }
         }
     }
 }
 
 impl TryFrom<Option<Operand>> for RMI64 {
-    type Error = OperandWithImmError;
+    type Error = OperandConversionError;
 
     fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
         match value {
             Some(operand) => Ok(Self::try_from(operand)?),
-            None => Err(OperandWithImmError::ImmediateOutOfRange),
+            None => Err(OperandConversionError::WrongOperand),
         }
     }
 }
@@ -525,25 +529,24 @@ impl From<Mem> for RM {
 }
 
 impl TryFrom<Operand> for RM {
-    type Error = ();
+    type Error = OperandConversionError;
 
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
             Operand::Mem(mem) => Ok(Self::Mem(mem)),
-            Operand::Imm(_) => Err(()),
+            Operand::Imm(_) => Err(OperandConversionError::WrongOperand),
         }
     }
 }
 
 impl TryFrom<Option<Operand>> for RM {
-    type Error = ();
+    type Error = OperandConversionError;
 
     fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
         match value {
-            Some(Operand::Reg(reg)) => Ok(Self::Reg(reg)),
-            Some(Operand::Mem(mem)) => Ok(Self::Mem(mem)),
-            _ => Err(()),
+            Some(operand) => Ok(Self::try_from(operand)?),
+            None => Err(OperandConversionError::WrongOperand),
         }
     }
 }
@@ -614,7 +617,7 @@ pub enum Operand {
     Imm(i128),
 }
 
-/// Contains `Ok(Some(Operand))` if parsing was successful.
+/// Contains  if parsing was successful.
 /// Contains `Ok(None)` if the parsed token was not a valid `Operand` (or there was no token
 /// remaining).
 /// Contains `ParsingError` if an error occured during parsing (for example, a memory operand or a
@@ -659,25 +662,28 @@ pub enum RI32 {
 }
 
 impl TryFrom<Operand> for RI32 {
-    type Error = OperandWithImmError;
+    type Error = OperandConversionError;
 
     fn try_from(value: Operand) -> Result<Self, Self::Error> {
         match value {
             Operand::Reg(reg) => Ok(Self::Reg(reg)),
-            Operand::Imm(imm) => Ok(Self::Imm(Imm32::try_from(imm)?)),
-            Operand::Mem(_) => Err(OperandWithImmError::WrongOperand),
+            Operand::Imm(imm) => {
+                Ok(Self::Imm(Imm32::try_from(imm).map_err(|_| {
+                    OperandConversionError::ImmediateOutOfRangeForDword
+                })?))
+            }
+            Operand::Mem(_) => Err(OperandConversionError::WrongOperand),
         }
     }
 }
 
 impl TryFrom<Option<Operand>> for RI32 {
-    type Error = OperandWithImmError;
+    type Error = OperandConversionError;
 
     fn try_from(value: Option<Operand>) -> Result<Self, Self::Error> {
         match value {
-            Some(Operand::Reg(reg)) => Ok(Self::Reg(reg)),
-            Some(Operand::Imm(imm)) => Ok(Self::Imm(Imm32::try_from(imm)?)),
-            _ => Err(OperandWithImmError::WrongOperand),
+            Some(operand) => Ok(Self::try_from(operand)?),
+            None => Err(OperandConversionError::WrongOperand),
         }
     }
 }

@@ -1,6 +1,8 @@
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use crate::operands::OperandConversionError;
+
 // This encompasses all errors that happen during lexing or parsing.
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,12 +37,19 @@ pub enum SyntaxErrorKind {
     ValueOutOfRangeForDword,
     ExpectedComma,
     ExpectedNewline,
-    ExpectedMemoryOperand,
     ExpectedScaleFactor,
     ExpectedLabel,
-    ExpectedRegisterOrMemory,
-    ExpectedRegisterOrImmediate,
-    ExpectedRegisterMemoryOrImmediate,
     ExpectedPlusOrMinusOrRBracket,
     ExpectedOperand,
+    InvalidOperands,
+}
+
+impl From<OperandConversionError> for SyntaxErrorKind {
+    fn from(value: OperandConversionError) -> Self {
+        match value {
+            OperandConversionError::WrongOperand => Self::InvalidOperands,
+            OperandConversionError::ImmediateOutOfRangeForDword => Self::ValueOutOfRangeForDword,
+            OperandConversionError::ImmediateOutOfRangeForQword => Self::ValueOutOfRangeForQword,
+        }
+    }
 }
