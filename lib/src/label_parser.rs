@@ -71,7 +71,7 @@ impl<'a> LabelParser<'a> {
 
     fn insert_sublabel(&mut self, label: &Label, line: usize) -> Result<(), SyntaxError> {
         let label_text = self.parent_label.0.clone() + &label.0;
-        if let Some(idx) = self.labels.get(&label)
+        if let Some(idx) = self.labels.get(label)
             && *idx != self.current_instr_idx
         {
             return Err(SyntaxError {

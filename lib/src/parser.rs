@@ -3,8 +3,8 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 use crate::{
     instruction::Instr,
     operands::{
-        BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandConversionError,
-        OperandParseResult, RI32, RM, RMI32, RMI64, Scale, Size,
+        BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandParseResult, RI32, RM,
+        RMI32, RMI64, Scale, Size,
     },
     syntax_error::{SyntaxError, SyntaxErrorKind},
     tokens::{Opcode, Token, TokenType},
