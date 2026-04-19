@@ -50,16 +50,6 @@
 </div>
 
 <style>
-  :global(body) {
-    margin: 0px;
-    height: 100vh;
-  }
-
-  :global(#app) {
-    width: 100%;
-    height: 100%;
-  }
-
   #container {
     position: relative;
     width: 100%;
@@ -69,5 +59,9 @@
   #controls {
     position: absolute;
     left: 50%;
+    font-size: large;
+    button {
+      font-size: medium;
+    }
   }
 </style>

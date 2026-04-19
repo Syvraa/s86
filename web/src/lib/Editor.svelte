@@ -9,6 +9,7 @@
   onMount(() => {
     editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
+    editor.setFontSize("large");
   });
 
   export function getContent() {
@@ -44,6 +45,7 @@
 <div id="editor"></div>
 
 <style>
+  /* If it's not global then it gets removed and the highlighting won't work. */
   :global(.editorhighlight) {
     position: absolute;
     background-color: rgba(0, 0, 255, 0.3);
