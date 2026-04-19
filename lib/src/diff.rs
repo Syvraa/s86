@@ -89,6 +89,15 @@ pub struct StateDiff {
     pub mem_diffs: Vec<MemDiff>,
 }
 
+#[cfg(feature = "wasm-bindgen")]
+#[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+impl StateDiff {
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    pub fn default() -> Self {
+        <Self as Default>::default()
+    }
+}
+
 impl StateDiff {
     pub fn push(&mut self, diff: Diff) {
         match diff {

@@ -42,6 +42,9 @@ impl Simulator {
     /// # Errors
     /// Returns `Err(Vec<SyntaxError>)` with all the errors that occured during lexing/parsing.
     pub fn new(source: &str, mem_size: usize) -> Result<Simulator, Vec<SyntaxError>> {
+        #[cfg(target_arch = "wasm32")]
+        console_error_panic_hook::set_once();
+
         let mut tokens = Lexer::new(source).lex()?;
         fix_opcode_label_definitions(&mut tokens);
         let labels = LabelParser::new(tokens.iter()).parse()?;
