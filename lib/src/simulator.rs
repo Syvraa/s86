@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
     diff::{Diff, DiffReg, MemDiff, RegDiff, StateDiff},
-    instruction::Instr,
+    instruction::{Instr, InstrKind},
     label_parser::{LabelParser, fix_opcode_label_definitions},
     lexer::Lexer,
     operands::{Mem, RM, Reg, SimulatorOperand, Size},
@@ -85,35 +85,35 @@ impl Simulator {
         // Needed, otherwise we would not execute the instruction we branched to.
         let mut branched = false;
         let mut diffs = StateDiff::default();
-        match &self.instrs[self.curr_instr] {
-            Instr::Mov { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
-            Instr::MovMem { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
-            Instr::Add { dest, src } | Instr::Sub { dest, src } => {
+        match &self.instrs[self.curr_instr].kind {
+            InstrKind::Mov { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
+            InstrKind::MovMem { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
+            InstrKind::Add { dest, src } | InstrKind::Sub { dest, src } => {
                 diffs.push(self.do_add_sub(*dest, *src)?);
             }
-            Instr::AddMem { dest, src } | Instr::SubMem { dest, src } => {
+            InstrKind::AddMem { dest, src } | InstrKind::SubMem { dest, src } => {
                 diffs.push(self.do_add_sub(*dest, *src)?);
             }
-            Instr::Xor { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
-            Instr::XorMem { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
-            Instr::Jmp { dest }
-            | Instr::Je { dest }
-            | Instr::Jne { dest }
-            | Instr::Ja { dest }
-            | Instr::Jae { dest }
-            | Instr::Jb { dest }
-            | Instr::Jbe { dest }
-            | Instr::Jg { dest }
-            | Instr::Jge { dest }
-            | Instr::Jl { dest }
-            | Instr::Jle { dest } => {
-                if self.should_branch(self.current_instr()) {
+            InstrKind::Xor { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
+            InstrKind::XorMem { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
+            InstrKind::Jmp { dest }
+            | InstrKind::Je { dest }
+            | InstrKind::Jne { dest }
+            | InstrKind::Ja { dest }
+            | InstrKind::Jae { dest }
+            | InstrKind::Jb { dest }
+            | InstrKind::Jbe { dest }
+            | InstrKind::Jg { dest }
+            | InstrKind::Jge { dest }
+            | InstrKind::Jl { dest }
+            | InstrKind::Jle { dest } => {
+                if self.should_branch(&self.current_instr().kind) {
                     self.curr_instr = *dest;
                     branched = true;
                 }
             }
-            Instr::Cmp { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
-            Instr::CmpMem { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
+            InstrKind::Cmp { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
+            InstrKind::CmpMem { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
         }
 
         if !branched {
@@ -127,6 +127,16 @@ impl Simulator {
     pub fn reset(&mut self) {
         self.registers = Registers::default();
         self.curr_instr = 0;
+    }
+
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[must_use]
+    pub fn current_line(&self) -> Option<usize> {
+        if self.curr_instr >= self.instrs.len() {
+            None
+        } else {
+            Some(self.current_instr().line)
+        }
     }
 }
 
@@ -152,12 +162,11 @@ impl Simulator {
         let address = self.get_mem_index(mem);
         let bytes = value.to_le_bytes();
         match mem.size {
-            Size::Byte => {
-                self.memory
-                    .get_mut(address..address + 1)
-                    .ok_or(SimulatorError::InvalidMemAccess)?
-                    .copy_from_slice(&bytes[0..1]);
-            }
+            Size::Byte => self
+                .memory
+                .get_mut(address..address + 1)
+                .ok_or(SimulatorError::InvalidMemAccess)?
+                .copy_from_slice(&bytes[0..1]),
             Size::Word => self
                 .memory
                 .get_mut(address..address + 2)
@@ -260,12 +269,12 @@ impl Simulator {
         let lhs = self.get_value(dest)?;
         let rhs = self.get_value(src)?;
 
-        let ((_, unsigned_overflow), (result, signed_overflow)) = match *self.current_instr() {
-            Instr::Add { .. } => (
+        let ((_, unsigned_overflow), (result, signed_overflow)) = match self.current_instr().kind {
+            InstrKind::Add { .. } => (
                 lhs.overflowing_add(rhs),
                 lhs.cast_signed().overflowing_add(rhs.cast_signed()),
             ),
-            Instr::Sub { .. } => (
+            InstrKind::Sub { .. } => (
                 lhs.overflowing_sub(rhs),
                 lhs.cast_signed().overflowing_sub(rhs.cast_signed()),
             ),
@@ -327,21 +336,21 @@ impl Simulator {
         }))
     }
 
-    fn should_branch(&self, op: &Instr) -> bool {
+    fn should_branch(&self, op: &InstrKind) -> bool {
         match op {
-            Instr::Jmp { dest: _ } => true,
-            Instr::Je { dest: _ } => self.registers.flags.zf(),
-            Instr::Jne { dest: _ } => !self.registers.flags.zf(),
-            Instr::Ja { dest: _ } => !self.registers.flags.cf() && !self.registers.flags.zf(),
-            Instr::Jae { dest: _ } => !self.registers.flags.cf(),
-            Instr::Jb { dest: _ } => self.registers.flags.cf(),
-            Instr::Jbe { dest: _ } => self.registers.flags.cf() || self.registers.flags.zf(),
-            Instr::Jg { dest: _ } => {
+            InstrKind::Jmp { dest: _ } => true,
+            InstrKind::Je { dest: _ } => self.registers.flags.zf(),
+            InstrKind::Jne { dest: _ } => !self.registers.flags.zf(),
+            InstrKind::Ja { dest: _ } => !self.registers.flags.cf() && !self.registers.flags.zf(),
+            InstrKind::Jae { dest: _ } => !self.registers.flags.cf(),
+            InstrKind::Jb { dest: _ } => self.registers.flags.cf(),
+            InstrKind::Jbe { dest: _ } => self.registers.flags.cf() || self.registers.flags.zf(),
+            InstrKind::Jg { dest: _ } => {
                 !self.registers.flags.zf() && self.registers.flags.sf() == self.registers.flags.of()
             }
-            Instr::Jge { dest: _ } => self.registers.flags.sf() == self.registers.flags.of(),
-            Instr::Jl { dest: _ } => self.registers.flags.sf() != self.registers.flags.of(),
-            Instr::Jle { dest: _ } => {
+            InstrKind::Jge { dest: _ } => self.registers.flags.sf() == self.registers.flags.of(),
+            InstrKind::Jl { dest: _ } => self.registers.flags.sf() != self.registers.flags.of(),
+            InstrKind::Jle { dest: _ } => {
                 self.registers.flags.zf() && self.registers.flags.sf() != self.registers.flags.of()
             }
             _ => false,

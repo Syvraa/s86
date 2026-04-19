@@ -1,7 +1,7 @@
 use std::{collections::HashMap, iter::Peekable, slice::Iter};
 
 use crate::{
-    instruction::Instr,
+    instruction::{Instr, InstrKind},
     operands::{
         BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandParseResult, RI32, RM,
         RMI32, RMI64, Scale, Size,
@@ -53,8 +53,11 @@ impl<'a> Parser<'a> {
             match token.ty {
                 TokenType::Opcode(op) => {
                     match self.parse_opcode(op) {
-                        Some(instr) if self.peek().is_none_or(|t| t.ty == TokenType::Newline) => {
-                            instrs.push(instr);
+                        Some(kind) if self.peek().is_none_or(|t| t.ty == TokenType::Newline) => {
+                            instrs.push(Instr {
+                                line: self.line,
+                                kind,
+                            });
                         }
                         // If no errors occured during parsing, but there is an unexpected token
                         // after it.
@@ -101,7 +104,7 @@ impl<'a> Parser<'a> {
         while self.next().is_some_and(|t| t.ty != TokenType::Newline) {}
     }
 
-    fn parse_opcode(&mut self, op: Opcode) -> Option<Instr> {
+    fn parse_opcode(&mut self, op: Opcode) -> Option<InstrKind> {
         type O = Opcode;
         let instr = match op {
             O::Mov => self.parse_mov()?,
@@ -109,57 +112,57 @@ impl<'a> Parser<'a> {
             O::Jmp => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jmp { dest }
+                InstrKind::Jmp { dest }
             }
             O::Je | O::Jz => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Je { dest }
+                InstrKind::Je { dest }
             }
             O::Jne | O::Jnz => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jne { dest }
+                InstrKind::Jne { dest }
             }
             O::Ja | O::Jnbe => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Ja { dest }
+                InstrKind::Ja { dest }
             }
             O::Jae | O::Jnb => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jae { dest }
+                InstrKind::Jae { dest }
             }
             O::Jb | O::Jnae => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jb { dest }
+                InstrKind::Jb { dest }
             }
             O::Jbe | O::Jna => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jbe { dest }
+                InstrKind::Jbe { dest }
             }
             O::Jg | O::Jnle => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jg { dest }
+                InstrKind::Jg { dest }
             }
             O::Jge | O::Jnl => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jge { dest }
+                InstrKind::Jge { dest }
             }
             O::Jl | O::Jnge => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jl { dest }
+                InstrKind::Jl { dest }
             }
             O::Jle | O::Jng => {
                 let dest = self.get_instr_idx()?;
 
-                Instr::Jle { dest }
+                InstrKind::Jle { dest }
             }
         };
 
@@ -394,7 +397,7 @@ impl<'a> Parser<'a> {
         Some(instr_idx)
     }
 
-    fn parse_mov(&mut self) -> Option<Instr> {
+    fn parse_mov(&mut self) -> Option<InstrKind> {
         let dest = try_convert!(self, RM, self.parse_operand()?);
 
         if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
@@ -431,11 +434,11 @@ impl<'a> Parser<'a> {
         }
 
         let instr = match dest {
-            RM::Reg(reg) => Instr::Mov {
+            RM::Reg(reg) => InstrKind::Mov {
                 dest: reg,
                 src: try_convert!(self, RMI64, src),
             },
-            RM::Mem(mem) => Instr::MovMem {
+            RM::Mem(mem) => InstrKind::MovMem {
                 dest: mem,
                 src: try_convert!(self, RI32, src),
             },
@@ -444,7 +447,7 @@ impl<'a> Parser<'a> {
         Some(instr)
     }
 
-    fn parse_binary_op(&mut self, op: Opcode) -> Option<Instr> {
+    fn parse_binary_op(&mut self, op: Opcode) -> Option<InstrKind> {
         type O = Opcode;
         let dest = try_convert!(self, RM, self.parse_operand()?);
         if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
@@ -485,20 +488,20 @@ impl<'a> Parser<'a> {
             RM::Reg(reg) => {
                 let src = try_convert!(self, RMI32, src);
                 match op {
-                    O::Add => Instr::Add { dest: reg, src },
-                    O::Sub => Instr::Sub { dest: reg, src },
-                    O::Xor => Instr::Xor { dest: reg, src },
-                    O::Cmp => Instr::Cmp { dest: reg, src },
+                    O::Add => InstrKind::Add { dest: reg, src },
+                    O::Sub => InstrKind::Sub { dest: reg, src },
+                    O::Xor => InstrKind::Xor { dest: reg, src },
+                    O::Cmp => InstrKind::Cmp { dest: reg, src },
                     _ => unreachable!("you forgot to add a case in parse_opcode"),
                 }
             }
             RM::Mem(mem) => {
                 let src = try_convert!(self, RI32, src);
                 match op {
-                    O::Add => Instr::AddMem { dest: mem, src },
-                    O::Sub => Instr::SubMem { dest: mem, src },
-                    O::Xor => Instr::XorMem { dest: mem, src },
-                    O::Cmp => Instr::CmpMem { dest: mem, src },
+                    O::Add => InstrKind::AddMem { dest: mem, src },
+                    O::Sub => InstrKind::SubMem { dest: mem, src },
+                    O::Xor => InstrKind::XorMem { dest: mem, src },
+                    O::Cmp => InstrKind::CmpMem { dest: mem, src },
                     _ => unreachable!("you forgot to add a case in parse_opcode"),
                 }
             }
@@ -530,7 +533,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::instruction::Instr;
+    use crate::instruction::InstrKind;
     use crate::label_parser::{LabelParser, fix_opcode_label_definitions};
     use crate::lexer::Lexer;
     use crate::operands::{
@@ -553,9 +556,12 @@ mod tests {
         let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
-            vec![Instr::Mov {
-                dest: Reg::Qword(QwordReg::Rax),
-                src: RMI64::Reg(Reg::Qword(QwordReg::Rbx))
+            vec![Instr {
+                line: 1,
+                kind: InstrKind::Mov {
+                    dest: Reg::Qword(QwordReg::Rax),
+                    src: RMI64::Reg(Reg::Qword(QwordReg::Rbx))
+                }
             }]
         );
     }
@@ -566,35 +572,45 @@ mod tests {
         let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
-            vec![Instr::Add {
-                dest: Reg::Qword(QwordReg::Rax),
-                src: RMI32::Imm(Imm32(8))
+            vec![Instr {
+                line: 1,
+                kind: InstrKind::Add {
+                    dest: Reg::Qword(QwordReg::Rax),
+                    src: RMI32::Imm(Imm32(8))
+                }
             }]
         );
     }
 
     #[test]
     fn multiple_binary_ops() {
-        let source = "
-        add rax, 8
+        let source = "add rax, 8
         xor rax, rax
-        sub rbx, rax
-    ";
+        sub rbx, rax";
         let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
             vec![
-                Instr::Add {
-                    dest: Reg::Qword(QwordReg::Rax),
-                    src: RMI32::Imm(Imm32(8))
+                Instr {
+                    line: 1,
+                    kind: InstrKind::Add {
+                        dest: Reg::Qword(QwordReg::Rax),
+                        src: RMI32::Imm(Imm32(8))
+                    }
                 },
-                Instr::Xor {
-                    dest: Reg::Qword(QwordReg::Rax),
-                    src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
+                Instr {
+                    line: 2,
+                    kind: InstrKind::Xor {
+                        dest: Reg::Qword(QwordReg::Rax),
+                        src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
+                    }
                 },
-                Instr::Sub {
-                    dest: Reg::Qword(QwordReg::Rbx),
-                    src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
+                Instr {
+                    line: 3,
+                    kind: InstrKind::Sub {
+                        dest: Reg::Qword(QwordReg::Rbx),
+                        src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
+                    }
                 },
             ]
         );
@@ -628,13 +644,17 @@ mov rax, reqrewq";
 
     #[test]
     fn jmp() {
-        let source = "
-    label:
-        jmp label
-";
+        let source = "label:
+        jmp label";
 
         let parsed = parse(source).unwrap();
-        assert_eq!(parsed, vec![Instr::Jmp { dest: 0 }]);
+        assert_eq!(
+            parsed,
+            vec![Instr {
+                line: 2,
+                kind: InstrKind::Jmp { dest: 0 }
+            }]
+        );
     }
 
     #[test]
@@ -669,16 +689,17 @@ mov rax, reqrewq";
 
     #[test]
     fn negative_number() {
-        let source = "
-    mov rax, -100
-";
+        let source = "mov rax, -100";
 
         let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
-            vec![Instr::Mov {
-                dest: Reg::Qword(QwordReg::Rax),
-                src: RMI64::Imm(Imm64((-100_i64).cast_unsigned()))
+            vec![Instr {
+                line: 1,
+                kind: InstrKind::Mov {
+                    dest: Reg::Qword(QwordReg::Rax),
+                    src: RMI64::Imm(Imm64((-100_i64).cast_unsigned()))
+                }
             }]
         );
     }
@@ -699,43 +720,45 @@ mov rax, reqrewq";
 
     #[test]
     fn memory_rsp() {
-        let source = "
-    mov qword [rsp], rax
-";
+        let source = "mov qword [rsp], rax";
         let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
-            vec![Instr::MovMem {
-                dest: Mem {
-                    base: Some(BaseReg::Qword(QwordReg::Rsp)),
-                    index: None,
-                    disp: None,
-                    size: Size::Qword
-                },
-                src: RI32::Reg(Reg::Qword(QwordReg::Rax)),
+            vec![Instr {
+                line: 1,
+                kind: InstrKind::MovMem {
+                    dest: Mem {
+                        base: Some(BaseReg::Qword(QwordReg::Rsp)),
+                        index: None,
+                        disp: None,
+                        size: Size::Qword
+                    },
+                    src: RI32::Reg(Reg::Qword(QwordReg::Rax)),
+                }
             }]
         );
     }
 
     #[test]
     fn memory_index() {
-        let source = "
-    mov dword [rax*8], ebx
-";
+        let source = "mov dword [rax*8], ebx";
         let parsed = parse(source).unwrap();
         assert_eq!(
             parsed,
-            vec![Instr::MovMem {
-                dest: Mem {
-                    base: None,
-                    index: Some(Index {
-                        index: IndexReg::Qword(QwordIndexReg::Rax),
-                        scale: Scale::Eight
-                    }),
-                    disp: None,
-                    size: Size::Dword
-                },
-                src: RI32::Reg(Reg::Dword(DwordReg::Ebx)),
+            vec![Instr {
+                line: 1,
+                kind: InstrKind::MovMem {
+                    dest: Mem {
+                        base: None,
+                        index: Some(Index {
+                            index: IndexReg::Qword(QwordIndexReg::Rax),
+                            scale: Scale::Eight
+                        }),
+                        disp: None,
+                        size: Size::Dword
+                    },
+                    src: RI32::Reg(Reg::Dword(DwordReg::Ebx)),
+                }
             }]
         );
     }

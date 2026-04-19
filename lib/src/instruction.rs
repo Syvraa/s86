@@ -1,7 +1,13 @@
 use crate::operands::{Mem, RI32, RMI32, RMI64, Reg};
 
 #[derive(Debug, PartialEq)]
-pub enum Instr {
+pub struct Instr {
+    pub line: usize,
+    pub kind: InstrKind,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum InstrKind {
     Mov { dest: Reg, src: RMI64 },
     MovMem { dest: Mem, src: RI32 },
     Add { dest: Reg, src: RMI32 },
