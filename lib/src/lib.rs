@@ -1,5 +1,6 @@
 #![deny(clippy::pedantic)]
 #![feature(try_trait_v2)]
+#![feature(try_trait_v2_residual)]
 
 mod diff;
 mod instruction;

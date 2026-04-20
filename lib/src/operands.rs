@@ -1,8 +1,4 @@
-use std::{
-    convert::Infallible,
-    num::TryFromIntError,
-    ops::{FromResidual, Try},
-};
+use std::num::TryFromIntError;
 
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -617,12 +613,12 @@ pub enum Operand {
     Imm(i128),
 }
 
-/// Contains  if parsing was successful.
+/// Contains `Ok(Some(Operand))` if parsing was successful.
 /// Contains `Ok(None)` if the parsed token was not a valid `Operand` (or there was no token
 /// remaining).
 /// Contains `ParsingError` if an error occured during parsing (for example, a memory operand or a
 /// negative number could not be parsed). In that case, the error was already pushed to `self.errors`,
-/// so you should just use `?` to return None.
+/// so you should just use `?` to return `None`.
 // I know this is a really weird type but this was the most convenient way I could come up for
 // having 2 error states while making the api convenient (just use ? if there is an error, nothing
 // more convenient).
@@ -631,17 +627,26 @@ pub enum OperandParseResult {
     ParsingError,
 }
 
-impl FromResidual for OperandParseResult {
-    fn from_residual(_: <Self as Try>::Residual) -> Self {
+impl std::ops::FromResidual for OperandParseResult {
+    fn from_residual(_: <Self as std::ops::Try>::Residual) -> Self {
         Self::ParsingError
     }
 }
 
-impl Try for OperandParseResult {
+impl<T> std::ops::FromResidual<ParsingError> for Option<T> {
+    fn from_residual(_: ParsingError) -> Self {
+        None
+    }
+}
+
+pub struct ParsingError;
+impl std::ops::Residual<Option<Operand>> for ParsingError {
+    type TryType = OperandParseResult;
+}
+
+impl std::ops::Try for OperandParseResult {
     type Output = Option<Operand>;
-    // Basically, this can only be None.
-    // TODO: Change this to ! once it is stabilized so it looks prettier.
-    type Residual = Option<Infallible>;
+    type Residual = ParsingError;
 
     fn from_output(output: Self::Output) -> Self {
         Self::Ok(output)
@@ -650,7 +655,7 @@ impl Try for OperandParseResult {
     fn branch(self) -> std::ops::ControlFlow<Self::Residual, Self::Output> {
         match self {
             Self::Ok(value) => std::ops::ControlFlow::Continue(value),
-            Self::ParsingError => std::ops::ControlFlow::Break(None),
+            Self::ParsingError => std::ops::ControlFlow::Break(ParsingError),
         }
     }
 }
