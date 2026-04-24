@@ -1,18 +1,17 @@
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::operands::{ByteReg, DwordReg, QwordReg, Reg, Size, WordReg};
+use crate::operands::{ByteReg, DwordReg, QwordReg, Reg, WordReg};
 
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemDiff {
     pub address: usize,
-    pub size: Size,
-    pub value: u64,
+    pub value: u8,
 }
 
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffReg {
     Rax,
     Rbx,
@@ -70,20 +69,20 @@ impl From<Reg> for DiffReg {
 }
 
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegDiff {
     pub reg: DiffReg,
     pub value: u64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Diff {
     Reg(RegDiff),
-    Mem(MemDiff),
+    Mem(Vec<MemDiff>),
 }
 
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen(getter_with_clone))]
-#[derive(Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StateDiff {
     pub reg_diffs: Vec<RegDiff>,
     pub mem_diffs: Vec<MemDiff>,
@@ -93,6 +92,9 @@ pub struct StateDiff {
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 impl StateDiff {
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    // Fine to allow since wasm_bindgen does not expose derived trait methods.
+    #[allow(clippy::should_implement_trait)]
+    #[must_use]
     pub fn default() -> Self {
         <Self as Default>::default()
     }
@@ -104,8 +106,8 @@ impl StateDiff {
             Diff::Reg(diff) => {
                 self.reg_diffs.push(diff);
             }
-            Diff::Mem(diff) => {
-                self.mem_diffs.push(diff);
+            Diff::Mem(mut diffs) => {
+                self.mem_diffs.append(&mut diffs);
             }
         }
     }

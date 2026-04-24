@@ -2,7 +2,7 @@
 #![feature(try_trait_v2)]
 #![feature(try_trait_v2_residual)]
 
-mod diff;
+pub mod diff;
 mod instruction;
 mod label_parser;
 mod lexer;

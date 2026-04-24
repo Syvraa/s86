@@ -143,6 +143,15 @@ impl Simulator {
     }
 }
 
+macro_rules! push_mem_diff {
+    ($vec:ident, $addr:expr, $val:expr) => {
+        $vec.push(MemDiff {
+            address: $addr,
+            value: $val,
+        });
+    };
+}
+
 impl Simulator {
     #[allow(clippy::cast_possible_truncation)]
     /// Gets the index the memory operand points to.
@@ -161,37 +170,54 @@ impl Simulator {
 
     /// Writes to the given memory operand's index.
     /// Returns `Err(())` if the address was out of bounds.
-    fn write_memory(&mut self, mem: Mem, value: u64) -> Result<MemDiff, SimulatorError> {
+    fn write_memory(&mut self, mem: Mem, value: u64) -> Result<Vec<MemDiff>, SimulatorError> {
         let address = self.get_mem_index(mem);
         let bytes = value.to_le_bytes();
+
+        let mut mem_diffs = Vec::new();
         match mem.size {
-            Size::Byte => self
-                .memory
-                .get_mut(address..address + 1)
-                .ok_or(SimulatorError::InvalidMemAccess)?
-                .copy_from_slice(&bytes[0..1]),
-            Size::Word => self
-                .memory
-                .get_mut(address..address + 2)
-                .ok_or(SimulatorError::InvalidMemAccess)?
-                .copy_from_slice(&bytes[0..2]),
-            Size::Dword => self
-                .memory
-                .get_mut(address..address + 4)
-                .ok_or(SimulatorError::InvalidMemAccess)?
-                .copy_from_slice(&bytes[0..4]),
-            Size::Qword => self
-                .memory
-                .get_mut(address..address + 8)
-                .ok_or(SimulatorError::InvalidMemAccess)?
-                .copy_from_slice(&bytes[0..8]),
+            Size::Byte => {
+                self.memory
+                    .get_mut(address..address + 1)
+                    .ok_or(SimulatorError::InvalidMemAccess)?
+                    .copy_from_slice(&bytes[0..1]);
+                push_mem_diff!(mem_diffs, address, bytes[0]);
+            }
+            Size::Word => {
+                self.memory
+                    .get_mut(address..address + 2)
+                    .ok_or(SimulatorError::InvalidMemAccess)?
+                    .copy_from_slice(&bytes[0..2]);
+                push_mem_diff!(mem_diffs, address, bytes[0]);
+                push_mem_diff!(mem_diffs, address + 1, bytes[1]);
+            }
+            Size::Dword => {
+                self.memory
+                    .get_mut(address..address + 4)
+                    .ok_or(SimulatorError::InvalidMemAccess)?
+                    .copy_from_slice(&bytes[0..4]);
+                push_mem_diff!(mem_diffs, address, bytes[0]);
+                push_mem_diff!(mem_diffs, address + 1, bytes[1]);
+                push_mem_diff!(mem_diffs, address + 2, bytes[2]);
+                push_mem_diff!(mem_diffs, address + 3, bytes[3]);
+            }
+            Size::Qword => {
+                self.memory
+                    .get_mut(address..address + 8)
+                    .ok_or(SimulatorError::InvalidMemAccess)?
+                    .copy_from_slice(&bytes[0..8]);
+                push_mem_diff!(mem_diffs, address, bytes[0]);
+                push_mem_diff!(mem_diffs, address + 1, bytes[1]);
+                push_mem_diff!(mem_diffs, address + 2, bytes[2]);
+                push_mem_diff!(mem_diffs, address + 3, bytes[3]);
+                push_mem_diff!(mem_diffs, address + 4, bytes[4]);
+                push_mem_diff!(mem_diffs, address + 5, bytes[5]);
+                push_mem_diff!(mem_diffs, address + 6, bytes[6]);
+                push_mem_diff!(mem_diffs, address + 7, bytes[7]);
+            }
         }
 
-        Ok(MemDiff {
-            address,
-            size: mem.size,
-            value,
-        })
+        Ok(mem_diffs)
     }
 
     /// Reads from the given memory operand's index.

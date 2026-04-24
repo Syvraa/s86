@@ -1,4 +1,8 @@
 use s86::Simulator;
+use s86::diff::DiffReg;
+use s86::diff::MemDiff;
+use s86::diff::RegDiff;
+use s86::diff::StateDiff;
 
 #[test]
 fn read_dword() {
@@ -6,8 +10,15 @@ fn read_dword() {
     mov rax, qword [0]
 ";
     let mut simulator = Simulator::new(source, 16).unwrap();
-    simulator.run().unwrap();
+    let diff = simulator.step().unwrap();
 
+    assert_eq!(
+        diff.reg_diffs,
+        vec![RegDiff {
+            reg: DiffReg::Rax,
+            value: 0
+        }]
+    );
     assert_eq!(simulator.registers.rax, 0);
 }
 
@@ -18,8 +29,27 @@ fn write_byte() {
     mov ah, byte [1]
 ";
     let mut simulator = Simulator::new(source, 16).unwrap();
-    simulator.run().unwrap();
+    let diffs = vec![simulator.step().unwrap(), simulator.step().unwrap()];
 
+    assert_eq!(
+        diffs,
+        vec![
+            StateDiff {
+                reg_diffs: vec![],
+                mem_diffs: vec![MemDiff {
+                    address: 1,
+                    value: 8
+                }],
+            },
+            StateDiff {
+                reg_diffs: vec![RegDiff {
+                    reg: DiffReg::Rax,
+                    value: 8
+                }],
+                mem_diffs: vec![]
+            }
+        ]
+    );
     assert_eq!(simulator.registers.rax, 8 << 8);
 }
 
