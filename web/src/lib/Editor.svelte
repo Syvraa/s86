@@ -4,12 +4,13 @@
   import { onMount } from "svelte";
 
   let editor: ace.Editor;
+  let editorDiv: HTMLDivElement;
   let prevMarkerId: number | null = null;
 
   onMount(() => {
-    editor = ace.edit("editor");
+    editor = ace.edit(editorDiv);
     editor.setTheme("ace/theme/monokai");
-    editor.setFontSize("large");
+    editor.setFontSize("1.1em");
   });
 
   export function getContent() {
@@ -42,7 +43,7 @@
   }
 </script>
 
-<div id="editor"></div>
+<div class="editor" bind:this={editorDiv}></div>
 
 <style>
   /* If it's not global then it gets removed and the highlighting won't work. */
@@ -52,10 +53,10 @@
     z-index: 100;
   }
 
-  #editor {
-    margin: 0px;
+  .editor {
     position: absolute;
-    width: 50%;
+    margin: 0px;
+    width: 100%;
     height: 100%;
   }
 </style>
