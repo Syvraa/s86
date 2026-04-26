@@ -6,6 +6,9 @@
 
   let memory: number[] = $state([]);
   let bytesPerRow = $derived(new MediaQuery("min-width: 1280px").current ? 32 : 16);
+  let longestAddrLength = $derived(
+    (Math.floor((memory.length - 1) / bytesPerRow) * bytesPerRow).toString(16).length,
+  );
 
   $effect(() => {
     for (const mem_diff of diff.mem_diffs) {
@@ -35,7 +38,9 @@
     {@const row = Math.floor(i / bytesPerRow) + 2}
     {@const col = (i % bytesPerRow) + 2}
     {#if i % bytesPerRow === 0}
-      <div class="address" style:grid-row={row} style:grid-column={1}>0x{i.toString(16)}</div>
+      <div class="address" style:grid-row={row} style:grid-column={1}>
+        0x{i.toString(16).padStart(longestAddrLength, "0")}
+      </div>
     {/if}
     <div
       class="byte"
@@ -43,11 +48,11 @@
       style:grid-row={row}
       style:grid-column={col}
     >
-      {byte.toString(16)}
+      {byte.toString(16).padStart(2, "0")}
     </div>
     {#if i % bytesPerRow === bytesPerRow - 1}
       <div class="address" style:grid-row={row} style:grid-column={bytesPerRow + 2}>
-        0x{i.toString(16)}
+        0x{i.toString(16).padStart(longestAddrLength, "0")}
       </div>
     {/if}
   {/each}
