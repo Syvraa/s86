@@ -81,6 +81,7 @@
 
   function reset() {
     simulator = null;
+    diff = StateDiff.default();
     if (intervalId) clearInterval(intervalId);
     registers.reset();
     memory.reset();

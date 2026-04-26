@@ -31,7 +31,14 @@
     {#if i % 32 === 0}
       <div class="address" style:grid-row={row} style:grid-column={1}>0x{i.toString(16)}</div>
     {/if}
-    <div class="byte" style:grid-row={row} style:grid-column={col}>{byte.toString(16)}</div>
+    <div
+      class="byte"
+      class:highlight={diff.mem_diffs.some((d) => d.address == i)}
+      style:grid-row={row}
+      style:grid-column={col}
+    >
+      {byte.toString(16)}
+    </div>
     {#if i % 32 === 31}
       <div class="address" style:grid-row={row} style:grid-column={34}>0x{i.toString(16)}</div>
     {/if}
@@ -47,6 +54,10 @@
     overflow-y: scroll;
     font-family: monospace;
     text-align: center;
+  }
+
+  .highlight {
+    background-color: blueviolet;
   }
 
   .header {
