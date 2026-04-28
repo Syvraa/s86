@@ -1,5 +1,7 @@
 <script lang="ts">
   import { DiffReg, type StateDiff } from "s86-lib";
+  import Register from "./Register.svelte";
+  import Flags from "./Flags.svelte";
 
   let { diff }: { diff: StateDiff } = $props();
   let registers: Record<DiffReg, bigint> = $state({
@@ -29,7 +31,7 @@
   });
 
   export function reset() {
-    Object.assign(registers, {
+    registers = {
       [DiffReg.Rax]: 0n,
       [DiffReg.Rbx]: 0n,
       [DiffReg.Rcx]: 0n,
@@ -47,38 +49,141 @@
       [DiffReg.R14]: 0n,
       [DiffReg.R15]: 0n,
       [DiffReg.Flags]: 0n,
-    });
+    };
   }
 </script>
 
-Rax {registers[DiffReg.Rax]}
-<br />
-Rbx {registers[DiffReg.Rbx]}
-<br />
-Rcx {registers[DiffReg.Rcx]}
-<br />
-Rdx {registers[DiffReg.Rdx]}
-<br />
-Rsi {registers[DiffReg.Rsi]}
-<br />
-Rdi {registers[DiffReg.Rdi]}
-<br />
-Rsp {registers[DiffReg.Rsp]}
-<br />
-Rbp {registers[DiffReg.Rbp]}
-<br />
-R8 {registers[DiffReg.R8]}
-<br />
-R9 {registers[DiffReg.R9]}
-<br />
-R10 {registers[DiffReg.R10]}
-<br />
-R11 {registers[DiffReg.R11]}
-<br />
-R12 {registers[DiffReg.R12]}
-<br />
-R13 {registers[DiffReg.R13]}
-<br />
-R14 {registers[DiffReg.R14]}
-<br />
-R15 {registers[DiffReg.R15]}
+<div class="container">
+  <div class="register">
+    <Register
+      name="rax"
+      value={registers[DiffReg.Rax]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rax)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rbx"
+      value={registers[DiffReg.Rbx]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rbx)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rcx"
+      value={registers[DiffReg.Rcx]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rcx)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rdx"
+      value={registers[DiffReg.Rdx]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rdx)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rsi"
+      value={registers[DiffReg.Rsi]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rsi)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rdi"
+      value={registers[DiffReg.Rdi]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rdi)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rsp"
+      value={registers[DiffReg.Rsp]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rsp)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rbp"
+      value={registers[DiffReg.Rbp]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rbp)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r8"
+      value={registers[DiffReg.R8]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R8)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r9"
+      value={registers[DiffReg.R9]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R9)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r10"
+      value={registers[DiffReg.R10]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R10)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r11"
+      value={registers[DiffReg.R11]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R11)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r12"
+      value={registers[DiffReg.R12]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R12)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r13"
+      value={registers[DiffReg.R13]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R13)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r14"
+      value={registers[DiffReg.R14]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R14)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="r15"
+      value={registers[DiffReg.R15]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R15)}
+    />
+  </div>
+  <div class="register">
+    <Flags
+      value={registers[DiffReg.Flags]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Flags)}
+    />
+  </div>
+</div>
+
+<style>
+  .container {
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .register {
+    font-family: monospace;
+    min-width: 20ch;
+  }
+</style>

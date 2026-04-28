@@ -61,6 +61,10 @@
         }
 
         clearInterval(intervalId);
+        diff = {
+          reg_diffs: [] as RegDiff[],
+          mem_diffs: [] as MemDiff[],
+        } as StateDiff;
       }
     }, 1000 / hertz);
   }
@@ -75,7 +79,14 @@
       stepSimulator();
     } catch (err) {
       const error = err as SimulatorError;
-      console.log(error);
+      if (error === SimulatorError.InvalidMemAccess) {
+        console.log("Invalid memory access");
+      }
+
+      diff = {
+        reg_diffs: [] as RegDiff[],
+        mem_diffs: [] as MemDiff[],
+      } as StateDiff;
     }
   }
 
