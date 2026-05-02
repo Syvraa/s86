@@ -98,7 +98,8 @@ impl Lexer {
                     self.pos += 1;
 
                     while !self.is_at_end()
-                        && (self.current().is_alphanumeric() || self.current() == '.')
+                        && !self.current().is_whitespace()
+                        && !matches!(self.current(), ':' | '[' | ']' | '+' | '-' | '*' | ',')
                     {
                         scanned.push(self.current());
                         self.pos += 1;
@@ -138,9 +139,12 @@ impl Lexer {
                         }
                     }
                 }
-                'a'..='z' => {
+                _ => {
                     let mut scanned = String::new();
-                    while !self.is_at_end() && self.current().is_alphanumeric() {
+                    while !self.is_at_end()
+                        && !self.current().is_whitespace()
+                        && !matches!(self.current(), ':' | '[' | ']' | '+' | '-' | '*' | ',')
+                    {
                         scanned.push(self.current());
                         self.pos += 1;
                     }
@@ -158,8 +162,6 @@ impl Lexer {
                         ty,
                     });
                 }
-                // TODO: Change the lexer to accept any unicode character.
-                _ => panic!("unknown character: {}", self.current()),
             }
         }
 
@@ -643,6 +645,26 @@ jmp .label";
                 line: 1,
                 error: SyntaxErrorKind::NumberOutOfRange
             },]
+        );
+    }
+
+    #[test]
+    fn any_character() {
+        let src = "under_score 猫";
+
+        let tokens = lex(src).unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    line: 1,
+                    ty: TokenType::Label(Label("under_score".to_string()))
+                },
+                Token {
+                    line: 1,
+                    ty: TokenType::Label(Label("猫".to_string()))
+                }
+            ]
         );
     }
 }
