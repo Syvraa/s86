@@ -13,7 +13,6 @@
   import Memory from "./lib/Memory.svelte";
   import { onMount } from "svelte";
 
-  let diff = $state(StateDiff.default());
   let simulator: Simulator | null = $state(null);
   let registers: Registers;
   let memory: Memory;
@@ -22,85 +21,99 @@
   let memSize = $state(64);
   let intervalId = $state(0);
   let memoryError = $state("");
+  let timeoutId: number | undefined = $state(undefined);
 
   function createSimulator() {
     if (!memSize) return;
     try {
       simulator = new Simulator(editor.getContent(), memSize);
-      diff = {
-        reg_diffs: [{ reg: DiffReg.Rsp, value: BigInt(memSize - 1) } as RegDiff],
-        mem_diffs: [] as MemDiff[],
-      } as StateDiff;
-    } catch (err) {
-      const error = err as SyntaxError;
-      console.log(error);
-      return;
+      editor.clearErrors();
+    } catch (errs) {
+      editor.showErrors(errs as SyntaxError[]);
+      throw {};
     }
   }
 
-  function stepSimulator() {
-    if (simulator) {
-      diff = simulator.step();
+  function checkForErrors() {
+    if (simulator) return;
+    try {
+      new Simulator(editor.getContent(), 0);
+      editor.clearErrors();
+    } catch (errs) {
+      editor.showErrors(errs as SyntaxError[]);
+    }
+  }
+
+  function stepSimulator(onEnd?: () => void) {
+    if (!simulator) return;
+
+    if (simulator.is_at_end() && onEnd) {
+      onEnd();
+    }
+
+    try {
+      editor.highlightLine(simulator!.current_line());
+      const diff = simulator.step();
+      registers.update(diff);
+      memory.update(diff);
+    } catch (err) {
+      const error = err as SimulatorError;
+      editor.highlightSimulatorError(simulator!.current_line()!, error);
     }
   }
 
   function run(hertz: number) {
     if (!hertz) return;
     if (!simulator) {
-      createSimulator();
+      try {
+        createSimulator();
+      } catch {
+        return;
+      }
     }
 
     intervalId = setInterval(() => {
-      try {
-        editor.highlightLine(simulator!.current_line());
-        stepSimulator();
-      } catch (err) {
-        const error = err as SimulatorError;
-        if (error === SimulatorError.InvalidMemAccess) {
-          console.log("Invalid memory access");
-        }
-
+      stepSimulator(() => {
         clearInterval(intervalId);
-        diff = {
-          reg_diffs: [] as RegDiff[],
-          mem_diffs: [] as MemDiff[],
-        } as StateDiff;
-      }
+      });
     }, 1000 / hertz);
   }
 
   function step() {
     if (!simulator) {
-      createSimulator();
-    }
-
-    editor.highlightLine(simulator!.current_line());
-    try {
-      stepSimulator();
-    } catch (err) {
-      const error = err as SimulatorError;
-      if (error === SimulatorError.InvalidMemAccess) {
-        console.log("Invalid memory access");
+      try {
+        createSimulator();
+      } catch {
+        return;
       }
-
-      diff = {
-        reg_diffs: [] as RegDiff[],
-        mem_diffs: [] as MemDiff[],
-      } as StateDiff;
     }
+
+    stepSimulator();
+  }
+
+  function setRsp() {
+    registers.update({
+      reg_diffs: [{ reg: DiffReg.Rsp, value: BigInt(memSize - 1) } as RegDiff],
+      mem_diffs: [] as MemDiff[],
+    } as StateDiff);
+    registers.update({
+      reg_diffs: [] as RegDiff[],
+      mem_diffs: [] as MemDiff[],
+    } as StateDiff);
   }
 
   function reset() {
     simulator = null;
-    diff = StateDiff.default();
     if (intervalId) clearInterval(intervalId);
     registers.reset();
+    setRsp();
     memory.reset();
     editor.reset();
   }
 
   onMount(() => {
     resizeMemory(memSize);
+    setRsp();
   });
 
   function resizeMemory(size: number | null) {
@@ -117,7 +130,13 @@
 
 <div class="container">
   <div class="editor">
-    <Editor bind:this={editor} />
+    <Editor
+      bind:this={editor}
+      onchange={() => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(checkForErrors, 2000);
+      }}
+    />
   </div>
   <div class="sidebar">
     <div class="controls">
@@ -128,6 +147,9 @@
           bind:value={memSize}
           oninput={() => {
             resizeMemory(memSize);
+            if (memSize) {
+              setRsp();
+            }
           }}
         />
         <span>{memoryError}</span>
@@ -151,8 +173,8 @@
       <button onclick={step}>Step</button>
       <button onclick={reset}>Reset</button>
     </div>
-    <Registers bind:this={registers} {diff} />
-    <Memory bind:this={memory} {diff} />
+    <Registers bind:this={registers} />
+    <Memory bind:this={memory} />
   </div>
 </div>
 

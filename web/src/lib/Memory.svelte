@@ -2,20 +2,20 @@
   import { StateDiff } from "s86-lib";
   import { MediaQuery } from "svelte/reactivity";
 
-  let { diff }: { diff: StateDiff } = $props();
-
+  let diff: StateDiff = $state(StateDiff.default());
   let memory: number[] = $state([]);
   let bytesPerRow = $derived(new MediaQuery("min-width: 1280px").current ? 32 : 16);
   let longestAddrLength = $derived(
     (Math.floor((memory.length - 1) / bytesPerRow) * bytesPerRow).toString(16).length,
   );
 
-  $effect(() => {
-    for (const mem_diff of diff.mem_diffs) {
+  export function update(new_diff: StateDiff) {
+    for (const mem_diff of new_diff.mem_diffs) {
       const address = mem_diff.address;
       memory[address] = mem_diff.value;
     }
-  });
+    diff = new_diff;
+  }
 
   export function resize(size: number) {
     memory = new Array(size).fill(0);
@@ -23,6 +23,7 @@
 
   export function reset() {
     memory.fill(0);
+    diff = StateDiff.default();
   }
 </script>
 

@@ -16,9 +16,7 @@ pub struct SyntaxError {
 pub enum SyntaxErrorKind {
     InvalidSublabelName,
     NumberOutOfRange,
-    UnknownCharacter,
     InconsistentLabelRedefinition,
-    PrematureEndOfTokens,
     UnexpectedToken,
     IncompleteMemoryOperand,
     InvalidBaseRegister,
@@ -27,7 +25,6 @@ pub enum SyntaxErrorKind {
     RspCannotBeUsedAsIndexRegister,
     InvalidScaleFactor,
     DisplacementOutOfRange,
-    DisplacementExceedsSignedDwordBounds,
     UnclosedMemoryOperand,
     InvalidLabelName,
     NoSuchLabel,

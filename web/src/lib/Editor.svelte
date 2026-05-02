@@ -1,7 +1,11 @@
 <script lang="ts">
   import ace from "ace-builds";
   import "ace-builds/src-noconflict/theme-monokai";
+  import type { SimulatorError, SyntaxError } from "s86-lib";
   import { onMount } from "svelte";
+  import { SIMULATOR_ERRORS, SYNTAX_ERRORS } from "../errors";
+
+  let { onchange }: { onchange: () => void } = $props();
 
   let editor: ace.Editor;
   let editorDiv: HTMLDivElement;
@@ -11,25 +15,35 @@
     editor = ace.edit(editorDiv);
     editor.setTheme("ace/theme/monokai");
     editor.setFontSize("1.1em");
+    editor.on("change", onchange);
   });
 
   export function getContent() {
     return editor.getValue();
   }
 
-  export function highlightLine(line: number | undefined) {
+  export function highlightLine(line: number | undefined): void;
+  function highlightLine(line: number, error: boolean): void;
+  export function highlightLine(line: number | undefined, error?: boolean) {
     removeLastMarker();
 
     if (line) {
       prevMarkerId = editor.session.addMarker(
         new ace.Range(line - 1, 0, line - 1),
-        "editorhighlight",
+        error ? "editorerrorhighlight" : "editorhighlight",
         "fullLine",
         true,
       );
     } else {
       removeLastMarker();
     }
+  }
+
+  export function highlightSimulatorError(line: number, error: SimulatorError) {
+    highlightLine(line, true);
+    editor
+      .getSession()
+      .setAnnotations([{ row: line - 1, column: 0, text: SIMULATOR_ERRORS[error], type: "error" }]);
   }
 
   function removeLastMarker() {
@@ -40,6 +54,24 @@
 
   export function reset() {
     removeLastMarker();
+    editor.getSession().clearAnnotations();
+  }
+
+  export function showErrors(errors: SyntaxError[]) {
+    editor.getSession().setAnnotations(
+      errors.map((err) => {
+        return {
+          row: err.line - 1,
+          column: 0,
+          text: SYNTAX_ERRORS[err.error],
+          type: "error",
+        };
+      }),
+    );
+  }
+
+  export function clearErrors() {
+    showErrors([]);
   }
 </script>
 
@@ -51,6 +83,12 @@
     position: absolute;
     background-color: rgba(0, 0, 255, 0.3);
     z-index: 100;
+  }
+
+  :global(.editorerrorhighlight) {
+    position: absolute;
+    background-color: rgba(255, 0, 0, 0.3);
+    z-index: 101;
   }
 
   .editor {

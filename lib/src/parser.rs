@@ -194,7 +194,7 @@ impl<'a> Parser<'a> {
                     } else if disp_overflow {
                         self.errors.push(SyntaxError {
                             line: self.line,
-                            error: SyntaxErrorKind::DisplacementExceedsSignedDwordBounds,
+                            error: SyntaxErrorKind::DisplacementOutOfRange,
                         });
                         return None;
                     }
@@ -400,13 +400,14 @@ impl<'a> Parser<'a> {
     fn parse_mov(&mut self) -> Option<InstrKind> {
         let dest = try_convert!(self, RM, self.parse_operand()?);
 
-        if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
+        if self.peek().is_none_or(|t| t.ty != TokenType::Comma) {
             self.errors.push(SyntaxError {
                 line: self.line,
                 error: SyntaxErrorKind::ExpectedComma,
             });
             return None;
         }
+        self.next();
 
         let src = self.parse_operand()?;
         match src {
@@ -450,13 +451,14 @@ impl<'a> Parser<'a> {
     fn parse_binary_op(&mut self, op: Opcode) -> Option<InstrKind> {
         type O = Opcode;
         let dest = try_convert!(self, RM, self.parse_operand()?);
-        if self.next().is_none_or(|t| t.ty != TokenType::Comma) {
+        if self.peek().is_none_or(|t| t.ty != TokenType::Comma) {
             self.errors.push(SyntaxError {
                 line: self.line,
                 error: SyntaxErrorKind::ExpectedComma,
             });
             return None;
         }
+        self.next();
 
         let src = self.parse_operand()?;
         match src {
@@ -483,7 +485,6 @@ impl<'a> Parser<'a> {
             _ => {}
         }
 
-        // TODO: refactor
         let instr = match dest {
             RM::Reg(reg) => {
                 let src = try_convert!(self, RMI32, src);
@@ -801,6 +802,21 @@ mov rax, reqrewq";
             vec![SyntaxError {
                 line: 1,
                 error: SyntaxErrorKind::ExpectedNewline
+            }]
+        );
+    }
+
+    #[test]
+    fn expected_comma_then_valid() {
+        let source = "mov rax
+xor rax, rax";
+        let errors = parse(source).unwrap_err();
+
+        assert_eq!(
+            errors,
+            vec![SyntaxError {
+                line: 1,
+                error: SyntaxErrorKind::ExpectedComma
             }]
         );
     }

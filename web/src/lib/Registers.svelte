@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { DiffReg, type StateDiff } from "s86-lib";
+  import { DiffReg, StateDiff } from "s86-lib";
   import Register from "./Register.svelte";
   import Flags from "./Flags.svelte";
 
-  let { diff }: { diff: StateDiff } = $props();
   let registers: Record<DiffReg, bigint> = $state({
     [DiffReg.Rax]: 0n,
     [DiffReg.Rbx]: 0n,
@@ -23,12 +22,14 @@
     [DiffReg.R15]: 0n,
     [DiffReg.Flags]: 0n,
   });
+  let diff: StateDiff = $state(StateDiff.default());
 
-  $effect(() => {
-    for (const reg_diff of diff.reg_diffs) {
+  export function update(new_diff: StateDiff) {
+    diff = new_diff;
+    for (const reg_diff of new_diff.reg_diffs) {
       registers[reg_diff.reg] = reg_diff.value;
     }
-  });
+  }
 
   export function reset() {
     registers = {
@@ -50,6 +51,7 @@
       [DiffReg.R15]: 0n,
       [DiffReg.Flags]: 0n,
     };
+    diff = StateDiff.default();
   }
 </script>
 

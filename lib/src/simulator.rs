@@ -69,9 +69,7 @@ impl Simulator {
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     #[allow(clippy::missing_errors_doc)]
     pub fn run(&mut self) -> Result<(), SimulatorError> {
-        while self.curr_instr < self.instrs.len() {
-            // We won't get an Err(SimulatorError::EndOfInstruction), because we just checked the
-            // condition.
+        while !self.is_at_end() {
             self.step()?;
         }
 
@@ -81,8 +79,8 @@ impl Simulator {
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     #[allow(clippy::missing_errors_doc)]
     pub fn step(&mut self) -> Result<StateDiff, SimulatorError> {
-        if self.curr_instr >= self.instrs.len() {
-            return Err(SimulatorError::EndOfInstructions);
+        if self.is_at_end() {
+            return Ok(StateDiff::default());
         }
 
         // Needed, otherwise we would not execute the instruction we branched to.
@@ -134,12 +132,19 @@ impl Simulator {
 
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     #[must_use]
+    /// Returns `None` if we are past the last instruction.
     pub fn current_line(&self) -> Option<usize> {
-        if self.curr_instr >= self.instrs.len() {
+        if self.is_at_end() {
             None
         } else {
             Some(self.current_instr().line)
         }
+    }
+
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[must_use]
+    pub fn is_at_end(&self) -> bool {
+        self.curr_instr >= self.instrs.len()
     }
 }
 
