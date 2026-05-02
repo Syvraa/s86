@@ -104,10 +104,8 @@ pub fn fix_opcode_label_definitions(tokens: &mut [Token]) {
                 if tokens.get(i + 1).is_some_and(|t| t.ty == TokenType::Colon) =>
             {
                 tokens[i] = Token {
-                    start: token.start,
-                    end: token.end,
-                    line: token.line,
                     ty: TokenType::Label(Label(op.as_str().to_string())),
+                    ..tokens[i]
                 };
             }
             _ => {}
@@ -131,32 +129,22 @@ mod tests {
             tokens,
             vec![
                 Token {
-                    start: 0,
-                    end: 2,
                     line: 1,
                     ty: TokenType::Label(Label("mov".into()))
                 },
                 Token {
-                    start: 3,
-                    end: 3,
                     line: 1,
                     ty: TokenType::Colon
                 },
                 Token {
-                    start: 4,
-                    end: 4,
                     line: 1,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 5,
-                    end: 8,
                     line: 2,
                     ty: TokenType::Sublabel(Label(".add".into()))
                 },
                 Token {
-                    start: 9,
-                    end: 9,
                     line: 2,
                     ty: TokenType::Colon
                 },

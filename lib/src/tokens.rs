@@ -65,8 +65,6 @@ impl Opcode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    pub start: usize,
-    pub end: usize,
     pub line: usize,
     pub ty: TokenType,
 }

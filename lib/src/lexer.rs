@@ -29,8 +29,6 @@ impl Lexer {
             match self.current() {
                 '\n' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::Newline,
                     });
@@ -48,8 +46,6 @@ impl Lexer {
                 }
                 ':' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::Colon,
                     });
@@ -57,8 +53,6 @@ impl Lexer {
                 }
                 '[' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::LBracket,
                     });
@@ -66,8 +60,6 @@ impl Lexer {
                 }
                 ']' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::RBracket,
                     });
@@ -75,8 +67,6 @@ impl Lexer {
                 }
                 '+' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::Plus,
                     });
@@ -84,8 +74,6 @@ impl Lexer {
                 }
                 '-' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::Minus,
                     });
@@ -93,8 +81,6 @@ impl Lexer {
                 }
                 '*' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::Star,
                     });
@@ -102,15 +88,12 @@ impl Lexer {
                 }
                 ',' => {
                     tokens.push(Token {
-                        start: self.pos,
-                        end: self.pos,
                         line: self.line,
                         ty: TokenType::Comma,
                     });
                     self.pos += 1;
                 }
                 '.' => {
-                    let start = self.pos;
                     let mut scanned = String::from(".");
                     self.pos += 1;
 
@@ -128,15 +111,12 @@ impl Lexer {
                         });
                     } else {
                         tokens.push(Token {
-                            start,
-                            end: self.pos - 1,
                             line: self.line,
                             ty: TokenType::Sublabel(Label(scanned)),
                         });
                     }
                 }
                 '0'..='9' => {
-                    let start = self.pos;
                     let mut scanned = String::new();
                     while !self.is_at_end() && self.current().is_numeric() {
                         scanned.push(self.current());
@@ -146,8 +126,6 @@ impl Lexer {
                     match scanned.parse() {
                         Ok(number) => {
                             tokens.push(Token {
-                                start,
-                                end: self.pos - 1,
                                 line: self.line,
                                 ty: TokenType::Number(number),
                             });
@@ -161,7 +139,6 @@ impl Lexer {
                     }
                 }
                 'a'..='z' => {
-                    let start = self.pos;
                     let mut scanned = String::new();
                     while !self.is_at_end() && self.current().is_alphanumeric() {
                         scanned.push(self.current());
@@ -177,8 +154,6 @@ impl Lexer {
                     };
 
                     tokens.push(Token {
-                        start,
-                        end: self.pos - 1,
                         line: self.line,
                         ty,
                     });
@@ -321,8 +296,6 @@ mod tests {
         assert_eq!(
             out[0],
             Token {
-                start: 0,
-                end: 2,
                 line: 1,
                 ty: TokenType::Number(999)
             }
@@ -350,38 +323,26 @@ mod tests {
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 2,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Mov)
                 },
                 Token {
-                    start: 4,
-                    end: 6,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Add)
                 },
                 Token {
-                    start: 8,
-                    end: 10,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Sub)
                 },
                 Token {
-                    start: 12,
-                    end: 14,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Xor)
                 },
                 Token {
-                    start: 16,
-                    end: 18,
                     line: 1,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
                 Token {
-                    start: 20,
-                    end: 22,
                     line: 1,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rbx))
                 },
@@ -397,26 +358,18 @@ mod tests {
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 2,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Mov)
                 },
                 Token {
-                    start: 4,
-                    end: 6,
                     line: 1,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
                 Token {
-                    start: 7,
-                    end: 7,
                     line: 1,
                     ty: TokenType::Comma
                 },
                 Token {
-                    start: 9,
-                    end: 11,
                     line: 1,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rbx))
                 },
@@ -433,56 +386,38 @@ xor rbx, rax";
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 2,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Mov)
                 },
                 Token {
-                    start: 4,
-                    end: 6,
                     line: 1,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
                 Token {
-                    start: 7,
-                    end: 7,
                     line: 1,
                     ty: TokenType::Comma
                 },
                 Token {
-                    start: 9,
-                    end: 11,
                     line: 1,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rbx))
                 },
                 Token {
-                    start: 12,
-                    end: 12,
                     line: 1,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 13,
-                    end: 15,
                     line: 2,
                     ty: TokenType::Opcode(Opcode::Xor)
                 },
                 Token {
-                    start: 17,
-                    end: 19,
                     line: 2,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rbx))
                 },
                 Token {
-                    start: 20,
-                    end: 20,
                     line: 2,
                     ty: TokenType::Comma
                 },
                 Token {
-                    start: 22,
-                    end: 24,
                     line: 2,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
@@ -505,128 +440,86 @@ jmp .";
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 4,
                     line: 1,
                     ty: TokenType::Label(Label("label".into()))
                 },
                 Token {
-                    start: 5,
-                    end: 5,
                     line: 1,
                     ty: TokenType::Colon
                 },
                 Token {
-                    start: 6,
-                    end: 6,
                     line: 1,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 7,
-                    end: 9,
                     line: 2,
                     ty: TokenType::Opcode(Opcode::Xor)
                 },
                 Token {
-                    start: 11,
-                    end: 13,
                     line: 2,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
                 Token {
-                    start: 14,
-                    end: 14,
                     line: 2,
                     ty: TokenType::Comma
                 },
                 Token {
-                    start: 16,
-                    end: 18,
                     line: 2,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
                 Token {
-                    start: 19,
-                    end: 19,
                     line: 2,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 20,
-                    end: 22,
                     line: 3,
                     ty: TokenType::Sublabel(Label(".if".into()))
                 },
                 Token {
-                    start: 23,
-                    end: 23,
                     line: 3,
                     ty: TokenType::Colon
                 },
                 Token {
-                    start: 24,
-                    end: 24,
                     line: 3,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 25,
-                    end: 27,
                     line: 4,
                     ty: TokenType::Opcode(Opcode::Add)
                 },
                 Token {
-                    start: 29,
-                    end: 31,
                     line: 4,
                     ty: TokenType::Reg(Reg::Qword(QwordReg::Rax))
                 },
                 Token {
-                    start: 32,
-                    end: 32,
                     line: 4,
                     ty: TokenType::Comma
                 },
                 Token {
-                    start: 34,
-                    end: 34,
                     line: 4,
                     ty: TokenType::Number(8)
                 },
                 Token {
-                    start: 35,
-                    end: 35,
                     line: 4,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 36,
-                    end: 36,
                     line: 5,
                     ty: TokenType::Sublabel(Label(".".into()))
                 },
                 Token {
-                    start: 37,
-                    end: 37,
                     line: 5,
                     ty: TokenType::Colon
                 },
                 Token {
-                    start: 38,
-                    end: 38,
                     line: 5,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 39,
-                    end: 41,
                     line: 6,
                     ty: TokenType::Opcode(Opcode::Jmp)
                 },
                 Token {
-                    start: 43,
-                    end: 43,
                     line: 6,
                     ty: TokenType::Sublabel(Label(".".into()))
                 },
@@ -642,14 +535,10 @@ jmp .";
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 2,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Jmp)
                 },
                 Token {
-                    start: 4,
-                    end: 4,
                     line: 1,
                     ty: TokenType::Sublabel(Label(".".into()))
                 },
@@ -665,14 +554,10 @@ jmp .";
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 5,
                     line: 1,
                     ty: TokenType::Label(Label("label1".into()))
                 },
                 Token {
-                    start: 6,
-                    end: 6,
                     line: 1,
                     ty: TokenType::Colon
                 },
@@ -690,32 +575,22 @@ jmp .label";
             out,
             vec![
                 Token {
-                    start: 0,
-                    end: 2,
                     line: 1,
                     ty: TokenType::Opcode(Opcode::Jmp)
                 },
                 Token {
-                    start: 4,
-                    end: 8,
                     line: 1,
                     ty: TokenType::Label(Label("label".into()))
                 },
                 Token {
-                    start: 9,
-                    end: 9,
                     line: 1,
                     ty: TokenType::Newline
                 },
                 Token {
-                    start: 10,
-                    end: 12,
                     line: 2,
                     ty: TokenType::Opcode(Opcode::Jmp)
                 },
                 Token {
-                    start: 14,
-                    end: 19,
                     line: 2,
                     ty: TokenType::Sublabel(Label(".label".into()))
                 },
@@ -746,14 +621,10 @@ jmp .label";
             tokens,
             vec![
                 Token {
-                    start: 0,
-                    end: 3,
                     line: 1,
                     ty: TokenType::Number(3412)
                 },
                 Token {
-                    start: 4,
-                    end: 11,
                     line: 1,
                     ty: TokenType::Label(Label("fdsa4321".to_string()))
                 },
