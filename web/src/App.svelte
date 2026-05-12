@@ -146,9 +146,11 @@
           type="number"
           bind:value={memSize}
           oninput={() => {
-            resizeMemory(memSize);
-            if (memSize) {
-              setRsp();
+            if (!simulator) {
+              resizeMemory(memSize);
+              if (memSize) {
+                setRsp();
+              }
             }
           }}
         />
