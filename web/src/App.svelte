@@ -133,6 +133,7 @@
     <Editor
       bind:this={editor}
       onchange={() => {
+        reset();
         clearTimeout(timeoutId);
         timeoutId = setTimeout(checkForErrors, 2000);
       }}
