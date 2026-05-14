@@ -173,7 +173,7 @@ impl Lexer {
     }
 
     fn is_at_end(&self) -> bool {
-        self.pos == self.chars.len()
+        self.pos >= self.chars.len()
     }
 
     fn current(&self) -> char {
@@ -666,5 +666,13 @@ jmp .label";
                 }
             ]
         );
+    }
+
+    #[test]
+    fn comment() {
+        let src = ";fdas";
+
+        let tokens = lex(src).unwrap();
+        assert_eq!(tokens, vec![]);
     }
 }
