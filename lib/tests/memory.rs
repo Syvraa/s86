@@ -44,7 +44,7 @@ fn write_byte() {
             StateDiff {
                 reg_diffs: vec![RegDiff {
                     reg: DiffReg::Rax,
-                    value: 8
+                    value: 2048
                 }],
                 mem_diffs: vec![]
             }

@@ -30,6 +30,7 @@ pub struct Registers {
 
 impl Registers {
     /// The unread bits are zeroed.
+    #[must_use]
     pub fn read(&self, reg: Reg) -> u64 {
         match reg {
             Reg::Qword(reg) => self.read_qword(reg),
@@ -39,14 +40,17 @@ impl Registers {
         }
     }
 
-    /// Truncates `value` to fit into the destination
-    pub fn write(&mut self, reg: Reg, value: u64) {
+    /// Truncates `value` to fit into the destination.
+    /// Returns the updated value of the whole register.
+    pub fn write(&mut self, reg: Reg, value: u64) -> u64 {
         match reg {
             Reg::Qword(reg) => self.write_qword(reg, value),
             Reg::Dword(reg) => self.write_dword(reg, value as u32),
             Reg::Word(reg) => self.write_word(reg, value as u16),
             Reg::Byte(reg) => self.write_byte(reg, value as u8),
         }
+
+        self.read(reg.to_whole_reg())
     }
 
     fn read_qword(&self, reg: QwordReg) -> u64 {
@@ -207,7 +211,7 @@ impl Registers {
             WR::R14w => &mut self.r14,
             WR::R15w => &mut self.r15,
         };
-        *reg |= u64::from(value);
+        *reg = *reg & 0xFFFF_FFFF_FFFF_0000 | u64::from(value);
     }
 
     fn write_byte(&mut self, reg: ByteReg, value: u8) {
@@ -247,10 +251,10 @@ impl Registers {
             BR::R14b => &mut self.r14,
             BR::R15b => &mut self.r15,
         };
-        *reg |= if upper_byte {
-            u64::from(value) << 8
+        *reg = if upper_byte {
+            *reg & 0xFFFF_FFFF_FFFF_00FF | u64::from(value) << 8
         } else {
-            u64::from(value)
+            *reg & 0xFFFF_FFFF_FFFF_FF00 | u64::from(value)
         };
     }
 

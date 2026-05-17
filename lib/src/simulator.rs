@@ -256,19 +256,13 @@ impl Simulator {
 
     /// Writes to the given operand. Truncates `value` to the given size.
     fn write(&mut self, dest: impl Into<RM>, value: u64) -> Result<Diff, SimulatorError> {
-        let diff;
-        match dest.into() {
-            RM::Reg(reg) => {
-                diff = Diff::Reg(RegDiff {
-                    reg: reg.into(),
-                    value,
-                });
-                self.registers.write(reg, value);
-            }
-            RM::Mem(mem) => {
-                diff = Diff::Mem(self.write_memory(mem, value)?);
-            }
-        }
+        let diff = match dest.into() {
+            RM::Reg(reg) => Diff::Reg(RegDiff {
+                reg: reg.into(),
+                value: self.registers.write(reg, value),
+            }),
+            RM::Mem(mem) => Diff::Mem(self.write_memory(mem, value)?),
+        };
 
         Ok(diff)
     }

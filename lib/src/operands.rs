@@ -151,6 +151,73 @@ impl Reg {
             Self::Byte(_) => Size::Byte,
         }
     }
+
+    pub fn to_whole_reg(self) -> Reg {
+        type Q = QwordReg;
+        type D = DwordReg;
+        type W = WordReg;
+        type B = ByteReg;
+        match self {
+            Self::Qword(Q::Rax)
+            | Self::Dword(D::Eax)
+            | Self::Word(W::Ax)
+            | Self::Byte(B::Ah | B::Al) => Self::Qword(Q::Rax),
+            Self::Qword(Q::Rbx)
+            | Self::Dword(D::Ebx)
+            | Self::Word(W::Bx)
+            | Self::Byte(B::Bh | B::Bl) => Self::Qword(Q::Rbx),
+            Self::Qword(Q::Rcx)
+            | Self::Dword(D::Ecx)
+            | Self::Word(W::Cx)
+            | Self::Byte(B::Ch | B::Cl) => Self::Qword(Q::Rcx),
+            Self::Qword(Q::Rdx)
+            | Self::Dword(D::Edx)
+            | Self::Word(W::Dx)
+            | Self::Byte(B::Dh | B::Dl) => Self::Qword(Q::Rdx),
+            Self::Qword(Q::Rsi) | Self::Dword(D::Esi) | Self::Word(W::Si) | Self::Byte(B::Sil) => {
+                Self::Qword(Q::Rsi)
+            }
+            Self::Qword(Q::Rdi) | Self::Dword(D::Edi) | Self::Word(W::Di) | Self::Byte(B::Dil) => {
+                Self::Qword(Q::Rdi)
+            }
+            Self::Qword(Q::Rsp) | Self::Dword(D::Esp) | Self::Word(W::Sp) | Self::Byte(B::Spl) => {
+                Self::Qword(Q::Rsp)
+            }
+            Self::Qword(Q::Rbp) | Self::Dword(D::Ebp) | Self::Word(W::Bp) | Self::Byte(B::Bpl) => {
+                Self::Qword(Q::Rbp)
+            }
+            Self::Qword(Q::R8) | Self::Dword(D::R8d) | Self::Word(W::R8w) | Self::Byte(B::R8b) => {
+                Self::Qword(Q::R8)
+            }
+            Self::Qword(Q::R9) | Self::Dword(D::R9d) | Self::Word(W::R9w) | Self::Byte(B::R9b) => {
+                Self::Qword(Q::R9)
+            }
+            Self::Qword(Q::R10)
+            | Self::Dword(D::R10d)
+            | Self::Word(W::R10w)
+            | Self::Byte(B::R10b) => Self::Qword(Q::R10),
+            Self::Qword(Q::R11)
+            | Self::Dword(D::R11d)
+            | Self::Word(W::R11w)
+            | Self::Byte(B::R11b) => Self::Qword(Q::R11),
+            Self::Qword(Q::R12)
+            | Self::Dword(D::R12d)
+            | Self::Word(W::R12w)
+            | Self::Byte(B::R12b) => Self::Qword(Q::R12),
+            Self::Qword(Q::R13)
+            | Self::Dword(D::R13d)
+            | Self::Word(W::R13w)
+            | Self::Byte(B::R13b) => Self::Qword(Q::R13),
+            Self::Qword(Q::R14)
+            | Self::Dword(D::R14d)
+            | Self::Word(W::R14w)
+            | Self::Byte(B::R14b) => Self::Qword(Q::R14),
+            Self::Qword(Q::R15)
+            | Self::Dword(D::R15d)
+            | Self::Word(W::R15w)
+            | Self::Byte(B::R15b) => Self::Qword(Q::R15),
+        }
+    }
 }
 
 impl From<IndexReg> for Reg {
