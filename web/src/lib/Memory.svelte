@@ -67,6 +67,10 @@
     overflow-y: scroll;
     font-family: monospace;
     text-align: center;
+
+    * {
+      height: 1rem;
+    }
   }
 
   .highlight {
