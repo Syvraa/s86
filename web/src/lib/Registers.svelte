@@ -20,6 +20,7 @@
     [DiffReg.R13]: 0n,
     [DiffReg.R14]: 0n,
     [DiffReg.R15]: 0n,
+    [DiffReg.Rip]: 0n,
     [DiffReg.Flags]: 0n,
   });
   let diff: StateDiff = $state(StateDiff.default());
@@ -49,6 +50,7 @@
       [DiffReg.R13]: 0n,
       [DiffReg.R14]: 0n,
       [DiffReg.R15]: 0n,
+      [DiffReg.Rip]: 0n,
       [DiffReg.Flags]: 0n,
     };
     diff = StateDiff.default();
@@ -166,6 +168,13 @@
       name="r15"
       value={registers[DiffReg.R15]}
       highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.R15)}
+    />
+  </div>
+  <div class="register">
+    <Register
+      name="rip"
+      value={registers[DiffReg.Rip]}
+      highlight={diff.reg_diffs.some((d) => d.reg == DiffReg.Rip)}
     />
   </div>
   <div class="register">

@@ -17,6 +17,7 @@ pub struct Registers {
     pub rdi: u64,
     pub rsp: u64,
     pub rbp: u64,
+    pub(crate) rip: u64,
     pub r8: u64,
     pub r9: u64,
     pub r10: u64,

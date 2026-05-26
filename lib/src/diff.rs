@@ -29,6 +29,7 @@ pub enum DiffReg {
     R13,
     R14,
     R15,
+    Rip,
     Flags,
 }
 

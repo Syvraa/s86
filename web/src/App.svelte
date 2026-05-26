@@ -28,6 +28,7 @@
     try {
       simulator = new Simulator(editor.getContent(), memSize);
       editor.clearErrors();
+      editor.highlightLine(simulator!.first_instr_line());
     } catch (errs) {
       editor.showErrors(errs as SyntaxError[]);
       throw {};
@@ -52,10 +53,10 @@
     }
 
     try {
-      editor.highlightLine(simulator!.current_line());
       const diff = simulator.step();
       registers.update(diff);
       memory.update(diff);
+      editor.highlightLine(simulator!.current_line());
     } catch (err) {
       const error = err as SimulatorError;
       editor.highlightSimulatorError(simulator!.current_line()!, error);
@@ -65,11 +66,8 @@
   function run(hertz: number) {
     if (!hertz) return;
     if (!simulator) {
-      try {
-        createSimulator();
-      } catch {
-        return;
-      }
+      createSimulator();
+      return;
     }
 
     intervalId = setInterval(() => {
@@ -81,11 +79,8 @@
 
   function step() {
     if (!simulator) {
-      try {
-        createSimulator();
-      } catch {
-        return;
-      }
+      createSimulator();
+      return;
     }
 
     stepSimulator();

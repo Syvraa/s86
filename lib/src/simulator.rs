@@ -22,15 +22,14 @@ pub struct Simulator {
     #[cfg(feature = "wasm-bindgen")]
     memory: Vec<u8>,
     instrs: Vec<Instr>,
-    curr_instr: usize,
 }
 
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 impl Simulator {
     /// Keep in mind this clones the entire array, so probably don't call it frequently.
-    #[allow(clippy::must_use_candidate)]
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     #[cfg(feature = "wasm-bindgen")]
+    #[must_use]
     pub fn memory(&self) -> Box<[u8]> {
         self.memory.clone().into_boxed_slice()
     }
@@ -62,7 +61,6 @@ impl Simulator {
             registers,
             memory,
             instrs: parsed,
-            curr_instr: 0,
         })
     }
 
@@ -77,6 +75,7 @@ impl Simulator {
     }
 
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::missing_errors_doc)]
     pub fn step(&mut self) -> Result<StateDiff, SimulatorError> {
         if self.is_at_end() {
@@ -86,7 +85,7 @@ impl Simulator {
         // Needed, otherwise we would not execute the instruction we branched to.
         let mut branched = false;
         let mut diffs = StateDiff::default();
-        match &self.instrs[self.curr_instr].kind {
+        match &self.instrs[self.registers.rip as usize].kind {
             InstrKind::Mov { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
             InstrKind::MovMem { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
             InstrKind::Add { dest, src } | InstrKind::Sub { dest, src } => {
@@ -109,7 +108,11 @@ impl Simulator {
             | InstrKind::Jl { dest }
             | InstrKind::Jle { dest } => {
                 if self.should_branch(&self.current_instr().kind) {
-                    self.curr_instr = *dest;
+                    self.registers.rip = *dest as u64;
+                    diffs.push(Diff::Reg(RegDiff {
+                        reg: DiffReg::Rip,
+                        value: self.registers.rip,
+                    }));
                     branched = true;
                 }
             }
@@ -118,7 +121,11 @@ impl Simulator {
         }
 
         if !branched {
-            self.curr_instr += 1;
+            self.registers.rip += 1;
+            diffs.push(Diff::Reg(RegDiff {
+                reg: DiffReg::Rip,
+                value: self.registers.rip,
+            }));
         }
 
         Ok(diffs)
@@ -127,7 +134,6 @@ impl Simulator {
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     pub fn reset(&mut self) {
         self.registers = Registers::default();
-        self.curr_instr = 0;
     }
 
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
@@ -143,8 +149,19 @@ impl Simulator {
 
     #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
     #[must_use]
+    pub fn first_instr_line(&self) -> Option<usize> {
+        if self.instrs.is_empty() {
+            None
+        } else {
+            Some(self.instrs[0].line)
+        }
+    }
+
+    #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
+    #[allow(clippy::cast_possible_truncation)]
+    #[must_use]
     pub fn is_at_end(&self) -> bool {
-        self.curr_instr >= self.instrs.len()
+        self.registers.rip as usize >= self.instrs.len()
     }
 }
 
@@ -385,8 +402,9 @@ impl Simulator {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     #[must_use]
     pub fn current_instr(&self) -> &'_ Instr {
-        &self.instrs[self.curr_instr]
+        &self.instrs[self.registers.rip as usize]
     }
 }
