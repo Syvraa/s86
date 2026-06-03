@@ -1,7 +1,7 @@
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::operands::{ByteReg, DwordReg, QwordReg, Reg, WordReg};
+use crate::operands::{reg::Reg, registers::QwordReg, sizeparams::OpSize};
 
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,38 +33,27 @@ pub enum DiffReg {
     Flags,
 }
 
-impl From<Reg> for DiffReg {
-    fn from(value: Reg) -> Self {
-        type R = Reg;
-        type Q = QwordReg;
-        type D = DwordReg;
-        type W = WordReg;
-        type B = ByteReg;
-        match value {
-            R::Qword(Q::Rax) | R::Dword(D::Eax) | R::Word(W::Ax) | R::Byte(B::Ah | B::Al) => {
-                Self::Rax
-            }
-            R::Qword(Q::Rbx) | R::Dword(D::Ebx) | R::Word(W::Bx) | R::Byte(B::Bh | B::Bl) => {
-                Self::Rbx
-            }
-            R::Qword(Q::Rcx) | R::Dword(D::Ecx) | R::Word(W::Cx) | R::Byte(B::Ch | B::Cl) => {
-                Self::Rcx
-            }
-            R::Qword(Q::Rdx) | R::Dword(D::Edx) | R::Word(W::Dx) | R::Byte(B::Dh | B::Dl) => {
-                Self::Rdx
-            }
-            R::Qword(Q::Rsi) | R::Dword(D::Esi) | R::Word(W::Si) | R::Byte(B::Sil) => Self::Rsi,
-            R::Qword(Q::Rdi) | R::Dword(D::Edi) | R::Word(W::Di) | R::Byte(B::Dil) => Self::Rdi,
-            R::Qword(Q::Rsp) | R::Dword(D::Esp) | R::Word(W::Sp) | R::Byte(B::Spl) => Self::Rsp,
-            R::Qword(Q::Rbp) | R::Dword(D::Ebp) | R::Word(W::Bp) | R::Byte(B::Bpl) => Self::Rbp,
-            R::Qword(Q::R8) | R::Dword(D::R8d) | R::Word(W::R8w) | R::Byte(B::R8b) => Self::R8,
-            R::Qword(Q::R9) | R::Dword(D::R9d) | R::Word(W::R9w) | R::Byte(B::R9b) => Self::R9,
-            R::Qword(Q::R10) | R::Dword(D::R10d) | R::Word(W::R10w) | R::Byte(B::R10b) => Self::R10,
-            R::Qword(Q::R11) | R::Dword(D::R11d) | R::Word(W::R11w) | R::Byte(B::R11b) => Self::R11,
-            R::Qword(Q::R12) | R::Dword(D::R12d) | R::Word(W::R12w) | R::Byte(B::R12b) => Self::R12,
-            R::Qword(Q::R13) | R::Dword(D::R13d) | R::Word(W::R13w) | R::Byte(B::R13b) => Self::R13,
-            R::Qword(Q::R14) | R::Dword(D::R14d) | R::Word(W::R14w) | R::Byte(B::R14b) => Self::R14,
-            R::Qword(Q::R15) | R::Dword(D::R15d) | R::Word(W::R15w) | R::Byte(B::R15b) => Self::R15,
+impl<S: OpSize> From<Reg<S>> for DiffReg {
+    fn from(value: Reg<S>) -> Self {
+        let Reg::Qword(whole_reg) = value.to_whole_reg();
+
+        match whole_reg {
+            QwordReg::Rax => Self::Rax,
+            QwordReg::Rbx => Self::Rbx,
+            QwordReg::Rcx => Self::Rcx,
+            QwordReg::Rdx => Self::Rdx,
+            QwordReg::Rsi => Self::Rsi,
+            QwordReg::Rdi => Self::Rdi,
+            QwordReg::Rsp => Self::Rsp,
+            QwordReg::Rbp => Self::Rbp,
+            QwordReg::R8 => Self::R8,
+            QwordReg::R9 => Self::R9,
+            QwordReg::R10 => Self::R10,
+            QwordReg::R11 => Self::R11,
+            QwordReg::R12 => Self::R12,
+            QwordReg::R13 => Self::R13,
+            QwordReg::R14 => Self::R14,
+            QwordReg::R15 => Self::R15,
         }
     }
 }

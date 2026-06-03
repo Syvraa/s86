@@ -1,7 +1,7 @@
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::operands::OperandConversionError;
+use crate::operands::operand::OperandConversionError;
 
 // This encompasses all errors that happen during lexing or parsing.
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
@@ -46,7 +46,6 @@ impl From<OperandConversionError> for SyntaxErrorKind {
         match value {
             OperandConversionError::WrongOperand => Self::InvalidOperands,
             OperandConversionError::ImmediateOutOfRangeForDword => Self::ValueOutOfRangeForDword,
-            OperandConversionError::ImmediateOutOfRangeForQword => Self::ValueOutOfRangeForQword,
         }
     }
 }

@@ -4,7 +4,11 @@ use bitfield::bitfield;
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::operands::{ByteReg, DwordReg, QwordReg, Reg, WordReg};
+use crate::operands::{
+    reg::Reg,
+    registers::{ByteReg, DwordReg, QwordReg, WordReg},
+    sizeparams::OpSize,
+};
 
 #[derive(Default, Clone, Copy)]
 #[cfg_attr(feature = "wasm-bindgen", wasm_bindgen)]
@@ -32,26 +36,34 @@ pub struct Registers {
 impl Registers {
     /// The unread bits are zeroed.
     #[must_use]
-    pub fn read(&self, reg: Reg) -> u64 {
-        match reg {
-            Reg::Qword(reg) => self.read_qword(reg),
-            Reg::Dword(reg) => u64::from(self.read_dword(reg)),
-            Reg::Word(reg) => u64::from(self.read_word(reg)),
-            Reg::Byte(reg) => u64::from(self.read_byte(reg)),
+    pub fn read<S>(&self, reg: &Reg<S>) -> u64
+    where
+        S: OpSize,
+    {
+        // Using .into() is fine here, since if the branch is hit, it's guaranteed to not be !.
+        match *reg {
+            Reg::Qword(reg) => self.read_qword(reg.into()),
+            Reg::Dword(reg) => u64::from(self.read_dword(reg.into())),
+            Reg::Word(reg) => u64::from(self.read_word(reg.into())),
+            Reg::Byte(reg) => u64::from(self.read_byte(reg.into())),
         }
     }
 
     /// Truncates `value` to fit into the destination.
     /// Returns the updated value of the whole register.
-    pub fn write(&mut self, reg: Reg, value: u64) -> u64 {
-        match reg {
-            Reg::Qword(reg) => self.write_qword(reg, value),
-            Reg::Dword(reg) => self.write_dword(reg, value as u32),
-            Reg::Word(reg) => self.write_word(reg, value as u16),
-            Reg::Byte(reg) => self.write_byte(reg, value as u8),
+    pub fn write<S>(&mut self, reg: &Reg<S>, value: u64) -> u64
+    where
+        S: OpSize,
+    {
+        // Using .into() is fine here, since if the branch is hit, it's guaranteed to not be !.
+        match *reg {
+            Reg::Qword(reg) => self.write_qword(reg.into(), value),
+            Reg::Dword(reg) => self.write_dword(reg.into(), value as u32),
+            Reg::Word(reg) => self.write_word(reg.into(), value as u16),
+            Reg::Byte(reg) => self.write_byte(reg.into(), value as u8),
         }
 
-        self.read(reg.to_whole_reg())
+        self.read(&reg.to_whole_reg())
     }
 
     fn read_qword(&self, reg: QwordReg) -> u64 {

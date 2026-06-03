@@ -1,4 +1,9 @@
-use crate::operands::{Mem, RI32, RMI32, RMI64, Reg};
+use crate::operands::{
+    mem::Mem,
+    operand::Operand,
+    reg::Reg,
+    sizes::{D, Q, QDWB},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct Instr {
@@ -8,25 +13,77 @@ pub struct Instr {
 
 #[derive(Debug, PartialEq)]
 pub enum InstrKind {
-    Mov { dest: Reg, src: RMI64 },
-    MovMem { dest: Mem, src: RI32 },
-    Add { dest: Reg, src: RMI32 },
-    AddMem { dest: Mem, src: RI32 },
-    Sub { dest: Reg, src: RMI32 },
-    SubMem { dest: Mem, src: RI32 },
-    Xor { dest: Reg, src: RMI32 },
-    XorMem { dest: Mem, src: RI32 },
-    Cmp { dest: Reg, src: RMI32 },
-    CmpMem { dest: Mem, src: RI32 },
-    Jmp { dest: usize },
-    Je { dest: usize },
-    Jne { dest: usize },
-    Ja { dest: usize },
-    Jae { dest: usize },
-    Jb { dest: usize },
-    Jbe { dest: usize },
-    Jg { dest: usize },
-    Jge { dest: usize },
-    Jl { dest: usize },
-    Jle { dest: usize },
+    Mov {
+        dest: Reg<QDWB>,
+        src: Operand<QDWB, QDWB, Q>,
+    },
+    MovMem {
+        dest: Mem<QDWB>,
+        src: Operand<QDWB, !, D>,
+    },
+    Add {
+        dest: Reg<QDWB>,
+        src: Operand<QDWB, QDWB, D>,
+    },
+    AddMem {
+        dest: Mem<QDWB>,
+        src: Operand<QDWB, !, D>,
+    },
+    Sub {
+        dest: Reg<QDWB>,
+        src: Operand<QDWB, QDWB, D>,
+    },
+    SubMem {
+        dest: Mem<QDWB>,
+        src: Operand<QDWB, !, D>,
+    },
+    Xor {
+        dest: Reg<QDWB>,
+        src: Operand<QDWB, QDWB, D>,
+    },
+    XorMem {
+        dest: Mem<QDWB>,
+        src: Operand<QDWB, !, D>,
+    },
+    Cmp {
+        dest: Reg<QDWB>,
+        src: Operand<QDWB, QDWB, D>,
+    },
+    CmpMem {
+        dest: Mem<QDWB>,
+        src: Operand<QDWB, !, D>,
+    },
+    Jmp {
+        dest: usize,
+    },
+    Je {
+        dest: usize,
+    },
+    Jne {
+        dest: usize,
+    },
+    Ja {
+        dest: usize,
+    },
+    Jae {
+        dest: usize,
+    },
+    Jb {
+        dest: usize,
+    },
+    Jbe {
+        dest: usize,
+    },
+    Jg {
+        dest: usize,
+    },
+    Jge {
+        dest: usize,
+    },
+    Jl {
+        dest: usize,
+    },
+    Jle {
+        dest: usize,
+    },
 }

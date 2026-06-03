@@ -1,6 +1,8 @@
 use phf::phf_map;
 
-use crate::operands::{ByteReg, DwordReg, Label, QwordReg, Reg, WordReg};
+use crate::operands::label::Label;
+use crate::operands::reg::Reg;
+use crate::operands::registers::{ByteReg, DwordReg, QwordReg, WordReg};
 use crate::syntax_error::{SyntaxError, SyntaxErrorKind};
 use crate::tokens::{Opcode, Token, TokenType};
 
@@ -284,7 +286,6 @@ pub static TOKENLOOKUP: phf::Map<&str, TokenType> = phf_map! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operands::{Label, QwordReg};
 
     fn lex(src: &str) -> Result<Vec<Token>, Vec<SyntaxError>> {
         let lexer = Lexer::new(src);

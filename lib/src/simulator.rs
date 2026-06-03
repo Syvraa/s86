@@ -6,7 +6,12 @@ use crate::{
     instruction::{Instr, InstrKind},
     label_parser::{LabelParser, fix_opcode_label_definitions},
     lexer::Lexer,
-    operands::{Mem, RM, Reg, SimulatorOperand, Size},
+    operands::{
+        mem::{Mem, Size},
+        reg::Reg,
+        simulator_operand::SimulatorOperand,
+        sizeparams::OpSize,
+    },
     parser::Parser,
     registers::Registers,
     simulator_error::SimulatorError,
@@ -86,16 +91,20 @@ impl Simulator {
         let mut branched = false;
         let mut diffs = StateDiff::default();
         match &self.instrs[self.registers.rip as usize].kind {
-            InstrKind::Mov { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
-            InstrKind::MovMem { dest, src } => diffs.push(self.do_mov(*dest, *src)?),
+            InstrKind::Mov { dest, src } => diffs.push(self.do_mov((*dest).into(), (*src).into())?),
+            InstrKind::MovMem { dest, src } => {
+                diffs.push(self.do_mov((*dest).into(), (*src).into())?);
+            }
             InstrKind::Add { dest, src } | InstrKind::Sub { dest, src } => {
-                diffs.push(self.do_add_sub(*dest, *src)?);
+                diffs.push(self.do_add_sub((*dest).into(), (*src).into())?);
             }
             InstrKind::AddMem { dest, src } | InstrKind::SubMem { dest, src } => {
-                diffs.push(self.do_add_sub(*dest, *src)?);
+                diffs.push(self.do_add_sub((*dest).into(), (*src).into())?);
             }
-            InstrKind::Xor { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
-            InstrKind::XorMem { dest, src } => diffs.push(self.do_xor(*dest, *src)?),
+            InstrKind::Xor { dest, src } => diffs.push(self.do_xor((*dest).into(), (*src).into())?),
+            InstrKind::XorMem { dest, src } => {
+                diffs.push(self.do_xor((*dest).into(), (*src).into())?);
+            }
             InstrKind::Jmp { dest }
             | InstrKind::Je { dest }
             | InstrKind::Jne { dest }
@@ -116,8 +125,10 @@ impl Simulator {
                     branched = true;
                 }
             }
-            InstrKind::Cmp { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
-            InstrKind::CmpMem { dest, src } => diffs.push(self.do_cmp(*dest, *src)?),
+            InstrKind::Cmp { dest, src } => diffs.push(self.do_cmp((*dest).into(), (*src).into())?),
+            InstrKind::CmpMem { dest, src } => {
+                diffs.push(self.do_cmp((*dest).into(), (*src).into())?);
+            }
         }
 
         if !branched {
@@ -178,12 +189,12 @@ impl Simulator {
     #[allow(clippy::cast_possible_truncation)]
     /// Gets the index the memory operand points to.
     /// Basically `lea`.
-    fn get_mem_index(&self, mem: Mem) -> usize {
+    fn get_mem_index<S: OpSize>(&self, mem: &Mem<S>) -> usize {
         let mut address = mem
             .base
-            .map_or(0, |base_reg| self.registers.read(Reg::from(base_reg)));
+            .map_or(0, |base_reg| self.registers.read(&Reg::from(base_reg)));
         address += mem.index.map_or(0, |idx| {
-            self.registers.read(Reg::from(idx.index)) * idx.scale as u64
+            self.registers.read(&Reg::from(idx.index)) * idx.scale as u64
         });
         address += mem.disp.map_or(0, u64::from);
 
@@ -192,7 +203,11 @@ impl Simulator {
 
     /// Writes to the given memory operand's index.
     /// Returns `Err(())` if the address was out of bounds.
-    fn write_memory(&mut self, mem: Mem, value: u64) -> Result<Vec<MemDiff>, SimulatorError> {
+    fn write_memory<S: OpSize>(
+        &mut self,
+        mem: &Mem<S>,
+        value: u64,
+    ) -> Result<Vec<MemDiff>, SimulatorError> {
         let address = self.get_mem_index(mem);
         let bytes = value.to_le_bytes();
 
@@ -245,7 +260,7 @@ impl Simulator {
     /// Reads from the given memory operand's index.
     /// Returns a `Ok(u64)` with the unread bits zeroed or `Err(())` if the address was out of
     /// bounds.
-    fn read_memory(&self, mem: Mem) -> Result<u64, SimulatorError> {
+    fn read_memory<S: OpSize>(&self, mem: &Mem<S>) -> Result<u64, SimulatorError> {
         let address = self.get_mem_index(mem);
         let mut bytes = [0u8; 8];
         let source = match mem.size {
@@ -272,45 +287,43 @@ impl Simulator {
     }
 
     /// Writes to the given operand. Truncates `value` to the given size.
-    fn write(&mut self, dest: impl Into<RM>, value: u64) -> Result<Diff, SimulatorError> {
-        let diff = match dest.into() {
-            RM::Reg(reg) => Diff::Reg(RegDiff {
+    fn write(&mut self, dest: SimulatorOperand, value: u64) -> Result<Diff, SimulatorError> {
+        let diff = match dest {
+            SimulatorOperand::Reg(reg) => Diff::Reg(RegDiff {
                 reg: reg.into(),
-                value: self.registers.write(reg, value),
+                value: self.registers.write(&reg, value),
             }),
-            RM::Mem(mem) => Diff::Mem(self.write_memory(mem, value)?),
+            SimulatorOperand::Mem(mem) => Diff::Mem(self.write_memory(&mem, value)?),
+            SimulatorOperand::Imm(_) => unreachable!("the parser should have validated this"),
         };
 
         Ok(diff)
     }
 
     /// Gets the value of the operand. Returns `Err(())` if memory access was out of bounds.
-    fn get_value(&self, src: impl Into<SimulatorOperand>) -> Result<u64, SimulatorError> {
-        match src.into() {
-            SimulatorOperand::Imm(imm) => Ok(imm),
-            SimulatorOperand::Reg(reg) => Ok(self.registers.read(reg)),
-            SimulatorOperand::Mem(mem) => self.read_memory(mem),
+    fn get_value(&self, src: SimulatorOperand) -> Result<u64, SimulatorError> {
+        match src {
+            SimulatorOperand::Imm(imm) => Ok(imm.0),
+            SimulatorOperand::Reg(reg) => Ok(self.registers.read(&reg)),
+            SimulatorOperand::Mem(mem) => self.read_memory(&mem),
         }
     }
 
     fn do_mov(
         &mut self,
-        dest: impl Into<RM>,
-        src: impl Into<SimulatorOperand>,
+        dest: SimulatorOperand,
+        src: SimulatorOperand,
     ) -> Result<Diff, SimulatorError> {
         let value = self.get_value(src)?;
 
         self.write(dest, value)
     }
 
-    fn do_add_sub<Dest>(
+    fn do_add_sub(
         &mut self,
-        dest: Dest,
-        src: impl Into<SimulatorOperand>,
-    ) -> Result<Diff, SimulatorError>
-    where
-        Dest: Into<RM> + Copy,
-    {
+        dest: SimulatorOperand,
+        src: SimulatorOperand,
+    ) -> Result<Diff, SimulatorError> {
         let lhs = self.get_value(dest)?;
         let rhs = self.get_value(src)?;
 
@@ -333,14 +346,11 @@ impl Simulator {
         self.write(dest, result.cast_unsigned())
     }
 
-    fn do_xor<Dest>(
+    fn do_xor(
         &mut self,
-        dest: Dest,
-        src: impl Into<SimulatorOperand>,
-    ) -> Result<Diff, SimulatorError>
-    where
-        Dest: Into<RM> + Copy,
-    {
+        dest: SimulatorOperand,
+        src: SimulatorOperand,
+    ) -> Result<Diff, SimulatorError> {
         let lhs = self.get_value(dest)?;
 
         let rhs = self.get_value(src)?;
@@ -357,14 +367,11 @@ impl Simulator {
         self.write(dest, result)
     }
 
-    fn do_cmp<Dest>(
+    fn do_cmp(
         &mut self,
-        dest: Dest,
-        src: impl Into<SimulatorOperand>,
-    ) -> Result<Diff, SimulatorError>
-    where
-        Dest: Into<RM> + Copy,
-    {
+        dest: SimulatorOperand,
+        src: SimulatorOperand,
+    ) -> Result<Diff, SimulatorError> {
         let lhs = self.get_value(dest)?;
         let rhs = self.get_value(src)?;
 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, iter::Peekable, slice::Iter};
 
 use crate::{
-    operands::Label,
+    operands::label::Label,
     syntax_error::{SyntaxError, SyntaxErrorKind},
     tokens::{Token, TokenType},
 };

@@ -14,10 +14,16 @@ fn read_dword() {
 
     assert_eq!(
         diff.reg_diffs,
-        vec![RegDiff {
-            reg: DiffReg::Rax,
-            value: 0
-        }]
+        vec![
+            RegDiff {
+                reg: DiffReg::Rax,
+                value: 0
+            },
+            RegDiff {
+                reg: DiffReg::Rip,
+                value: 1
+            }
+        ]
     );
     assert_eq!(simulator.registers.rax, 0);
 }
@@ -35,17 +41,26 @@ fn write_byte() {
         diffs,
         vec![
             StateDiff {
-                reg_diffs: vec![],
+                reg_diffs: vec![RegDiff {
+                    reg: DiffReg::Rip,
+                    value: 1
+                }],
                 mem_diffs: vec![MemDiff {
                     address: 1,
                     value: 8
                 }],
             },
             StateDiff {
-                reg_diffs: vec![RegDiff {
-                    reg: DiffReg::Rax,
-                    value: 2048
-                }],
+                reg_diffs: vec![
+                    RegDiff {
+                        reg: DiffReg::Rax,
+                        value: 2048
+                    },
+                    RegDiff {
+                        reg: DiffReg::Rip,
+                        value: 2
+                    }
+                ],
                 mem_diffs: vec![]
             }
         ]

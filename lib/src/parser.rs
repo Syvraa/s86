@@ -3,8 +3,13 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 use crate::{
     instruction::{Instr, InstrKind},
     operands::{
-        BaseReg, Bits, Imm32, Index, IndexReg, Label, Mem, Operand, OperandParseResult, RI32, RM,
-        RMI32, RMI64, Scale, Size,
+        immediates::{Bits as _, Imm32, Imm64},
+        label::Label,
+        mem::{Index, Mem, Scale, Size},
+        operand::{Operand, OperandParseResult},
+        registers::{BaseReg, IndexReg},
+        sizeparams::{ImmSize, OpSize},
+        sizes::{D, Q, QDWB},
     },
     syntax_error::{SyntaxError, SyntaxErrorKind},
     tokens::{Opcode, Token, TokenType},
@@ -22,12 +27,17 @@ pub struct Parser<'a> {
 /// Returns the successfully converted type or returns from the function with `None`.
 macro_rules! try_convert {
     ($self:expr, $ty:ty, $src:expr) => {
-        match <$ty>::try_from($src) {
-            Ok(result) => result,
-            Err(err) => {
-                $self.push_error(err);
-                return None;
+        if let Some(src) = $src {
+            match <$ty>::try_from_other(src) {
+                Ok(result) => result,
+                Err(err) => {
+                    $self.push_error(err);
+                    return None;
+                }
             }
+        } else {
+            $self.push_error(crate::operands::operand::OperandConversionError::WrongOperand);
+            return None;
         }
     };
 }
@@ -171,7 +181,7 @@ impl<'a> Parser<'a> {
 
     // TODO: I KNOW CLIPPY (refactor)
     #[allow(clippy::too_many_lines)]
-    fn parse_memory(&mut self, size: Size) -> Option<Mem> {
+    fn parse_memory(&mut self, size: Size) -> Option<Mem<QDWB>> {
         if self.next().is_none_or(|t| t.ty != TokenType::LBracket) {
             return None;
         }
@@ -199,12 +209,7 @@ impl<'a> Parser<'a> {
                         return None;
                     }
 
-                    return Some(Mem {
-                        base,
-                        index,
-                        disp,
-                        size,
-                    });
+                    return Some(Mem::new(base, index, disp, size).unwrap());
                 }
                 // If we encounter a - or a +, then we start over, as we would fail the check at
                 // the end if it was something like + rax (we would consume the + and panic because
@@ -323,7 +328,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Expects a `-` to already be consumed.
-    fn parse_negative_number(&mut self) -> Option<Operand> {
+    fn parse_negative_number(&mut self) -> Option<Operand<QDWB, QDWB, Q>> {
         let mut positive = false;
         while self.peek().is_some_and(|t| t.ty == TokenType::Minus) {
             self.next();
@@ -331,13 +336,17 @@ impl<'a> Parser<'a> {
         }
 
         if let TokenType::Number(num) = self.next()?.ty {
-            Some(Operand::Imm(if positive { num } else { -num }))
+            Some(Operand::Imm(if positive {
+                Imm64(num)
+            } else {
+                Imm64((-num.cast_signed()).cast_unsigned())
+            }))
         } else {
             None
         }
     }
 
-    fn parse_operand(&mut self) -> OperandParseResult {
+    fn parse_operand(&mut self) -> OperandParseResult<QDWB, QDWB, Q> {
         let Some(tok) = self.next() else {
             return OperandParseResult::Ok(None);
         };
@@ -352,7 +361,7 @@ impl<'a> Parser<'a> {
                     },
                 )))
             }
-            TokenType::Number(num) => OperandParseResult::Ok(Some(Operand::Imm(num))),
+            TokenType::Number(num) => OperandParseResult::Ok(Some(Operand::Imm(Imm64(num)))),
             TokenType::Minus => OperandParseResult::Ok(match self.parse_negative_number() {
                 Some(num) => Some(num),
                 None => return OperandParseResult::ParsingError,
@@ -397,19 +406,18 @@ impl<'a> Parser<'a> {
         Some(instr_idx)
     }
 
-    fn parse_mov(&mut self) -> Option<InstrKind> {
-        let dest = try_convert!(self, RM, self.parse_operand()?);
-
-        if self.peek().is_none_or(|t| t.ty != TokenType::Comma) {
-            self.errors.push(SyntaxError {
-                line: self.line,
-                error: SyntaxErrorKind::ExpectedComma,
-            });
-            return None;
-        }
-        self.next();
-
-        let src = self.parse_operand()?;
+    #[allow(clippy::ref_option)]
+    fn handle_size_mismatch<RS1, MS1, RS2, MS2, IS>(
+        &mut self,
+        dest: &Operand<RS1, MS1, !>,
+        src: &Option<Operand<RS2, MS2, IS>>,
+    ) where
+        RS1: OpSize,
+        MS1: OpSize,
+        RS2: OpSize,
+        MS2: OpSize,
+        IS: ImmSize,
+    {
         match src {
             Some(Operand::Reg(reg)) if dest.size() != reg.size() => {
                 self.errors.push(SyntaxError {
@@ -433,15 +441,31 @@ impl<'a> Parser<'a> {
             // return there.
             _ => {}
         }
+    }
+
+    fn parse_mov(&mut self) -> Option<InstrKind> {
+        let dest = try_convert!(self, Operand<QDWB, QDWB, !>, self.parse_operand()?);
+
+        if self.peek().is_none_or(|t| t.ty != TokenType::Comma) {
+            self.errors.push(SyntaxError {
+                line: self.line,
+                error: SyntaxErrorKind::ExpectedComma,
+            });
+            return None;
+        }
+        self.next();
+
+        let src = self.parse_operand()?;
+        self.handle_size_mismatch(&dest, &src);
 
         let instr = match dest {
-            RM::Reg(reg) => InstrKind::Mov {
+            Operand::Reg(reg) => InstrKind::Mov {
                 dest: reg,
-                src: try_convert!(self, RMI64, src),
+                src: try_convert!(self, Operand<QDWB, QDWB, Q>, src),
             },
-            RM::Mem(mem) => InstrKind::MovMem {
+            Operand::Mem(mem) => InstrKind::MovMem {
                 dest: mem,
-                src: try_convert!(self, RI32, src),
+                src: try_convert!(self, Operand<QDWB, !, D>, src),
             },
         };
 
@@ -450,7 +474,7 @@ impl<'a> Parser<'a> {
 
     fn parse_binary_op(&mut self, op: Opcode) -> Option<InstrKind> {
         type O = Opcode;
-        let dest = try_convert!(self, RM, self.parse_operand()?);
+        let dest = try_convert!(self, Operand<QDWB, QDWB, !>, self.parse_operand()?);
         if self.peek().is_none_or(|t| t.ty != TokenType::Comma) {
             self.errors.push(SyntaxError {
                 line: self.line,
@@ -461,33 +485,11 @@ impl<'a> Parser<'a> {
         self.next();
 
         let src = self.parse_operand()?;
-        match src {
-            Some(Operand::Reg(reg)) if dest.size() != reg.size() => {
-                self.errors.push(SyntaxError {
-                    line: self.line,
-                    error: SyntaxErrorKind::OperandSizeMismatch,
-                });
-            }
-            Some(Operand::Mem(mem)) if dest.size() != mem.size => {
-                self.errors.push(SyntaxError {
-                    line: self.line,
-                    error: SyntaxErrorKind::OperandSizeMismatch,
-                });
-            }
-            Some(Operand::Imm(imm)) if dest.size().bits() < imm.bits() => {
-                self.errors.push(SyntaxError {
-                    line: self.line,
-                    error: SyntaxErrorKind::SourceDoesNotFitIntoDestination,
-                });
-            }
-            // If the operand is wrong, we don't care if it fits, we let the conversions fail and
-            // return there.
-            _ => {}
-        }
+        self.handle_size_mismatch(&dest, &src);
 
         let instr = match dest {
-            RM::Reg(reg) => {
-                let src = try_convert!(self, RMI32, src);
+            Operand::Reg(reg) => {
+                let src = try_convert!(self, Operand<QDWB, QDWB, D>, src);
                 match op {
                     O::Add => InstrKind::Add { dest: reg, src },
                     O::Sub => InstrKind::Sub { dest: reg, src },
@@ -496,8 +498,8 @@ impl<'a> Parser<'a> {
                     _ => unreachable!("you forgot to add a case in parse_opcode"),
                 }
             }
-            RM::Mem(mem) => {
-                let src = try_convert!(self, RI32, src);
+            Operand::Mem(mem) => {
+                let src = try_convert!(self, Operand<QDWB, !, D>, src);
                 match op {
                     O::Add => InstrKind::AddMem { dest: mem, src },
                     O::Sub => InstrKind::SubMem { dest: mem, src },
@@ -537,9 +539,8 @@ mod tests {
     use crate::instruction::InstrKind;
     use crate::label_parser::{LabelParser, fix_opcode_label_definitions};
     use crate::lexer::Lexer;
-    use crate::operands::{
-        DwordReg, Imm32, Imm64, IndexReg, QwordIndexReg, QwordReg, RMI64, Reg, Scale, Size,
-    };
+    use crate::operands::reg::Reg;
+    use crate::operands::registers::{DwordReg, IndexReg, QwordIndexReg, QwordReg};
 
     fn parse(source: &str) -> Result<Vec<Instr>, Vec<SyntaxError>> {
         let lexer = Lexer::new(source);
@@ -561,7 +562,7 @@ mod tests {
                 line: 1,
                 kind: InstrKind::Mov {
                     dest: Reg::Qword(QwordReg::Rax),
-                    src: RMI64::Reg(Reg::Qword(QwordReg::Rbx))
+                    src: Operand::Reg(Reg::Qword(QwordReg::Rbx))
                 }
             }]
         );
@@ -577,7 +578,7 @@ mod tests {
                 line: 1,
                 kind: InstrKind::Add {
                     dest: Reg::Qword(QwordReg::Rax),
-                    src: RMI32::Imm(Imm32(8))
+                    src: Operand::Imm(Imm32(8))
                 }
             }]
         );
@@ -596,21 +597,21 @@ mod tests {
                     line: 1,
                     kind: InstrKind::Add {
                         dest: Reg::Qword(QwordReg::Rax),
-                        src: RMI32::Imm(Imm32(8))
+                        src: Operand::Imm(Imm32(8))
                     }
                 },
                 Instr {
                     line: 2,
                     kind: InstrKind::Xor {
                         dest: Reg::Qword(QwordReg::Rax),
-                        src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
+                        src: Operand::Reg(Reg::Qword(QwordReg::Rax)),
                     }
                 },
                 Instr {
                     line: 3,
                     kind: InstrKind::Sub {
                         dest: Reg::Qword(QwordReg::Rbx),
-                        src: RMI32::Reg(Reg::Qword(QwordReg::Rax)),
+                        src: Operand::Reg(Reg::Qword(QwordReg::Rax)),
                     }
                 },
             ]
@@ -699,7 +700,7 @@ mov rax, reqrewq";
                 line: 1,
                 kind: InstrKind::Mov {
                     dest: Reg::Qword(QwordReg::Rax),
-                    src: RMI64::Imm(Imm64((-100_i64).cast_unsigned()))
+                    src: Operand::Imm(Imm64((-100_i64).cast_unsigned()))
                 }
             }]
         );
@@ -728,13 +729,9 @@ mov rax, reqrewq";
             vec![Instr {
                 line: 1,
                 kind: InstrKind::MovMem {
-                    dest: Mem {
-                        base: Some(BaseReg::Qword(QwordReg::Rsp)),
-                        index: None,
-                        disp: None,
-                        size: Size::Qword
-                    },
-                    src: RI32::Reg(Reg::Qword(QwordReg::Rax)),
+                    dest: Mem::new(Some(BaseReg::Qword(QwordReg::Rsp)), None, None, Size::Qword)
+                        .unwrap(),
+                    src: Operand::Reg(Reg::Qword(QwordReg::Rax)),
                 }
             }]
         );
@@ -749,16 +746,17 @@ mov rax, reqrewq";
             vec![Instr {
                 line: 1,
                 kind: InstrKind::MovMem {
-                    dest: Mem {
-                        base: None,
-                        index: Some(Index {
+                    dest: Mem::new(
+                        None,
+                        Some(Index {
                             index: IndexReg::Qword(QwordIndexReg::Rax),
                             scale: Scale::Eight
                         }),
-                        disp: None,
-                        size: Size::Dword
-                    },
-                    src: RI32::Reg(Reg::Dword(DwordReg::Ebx)),
+                        None,
+                        Size::Dword
+                    )
+                    .unwrap(),
+                    src: Operand::Reg(Reg::Dword(DwordReg::Ebx)),
                 }
             }]
         );
