@@ -4,6 +4,7 @@
   import type { SimulatorError, SyntaxError } from "s86-lib";
   import { onMount } from "svelte";
   import { SIMULATOR_ERRORS, SYNTAX_ERRORS } from "../errors";
+  import { DOUBLER } from "../examples";
 
   let { onchange }: { onchange: () => void } = $props();
 
@@ -15,6 +16,7 @@
     editor = ace.edit(editorDiv);
     editor.setTheme("ace/theme/monokai");
     editor.setFontSize("1.1em");
+    editor.setValue(DOUBLER, -1);
     editor.on("change", onchange);
   });
 
