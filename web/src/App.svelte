@@ -67,7 +67,6 @@
     if (!hertz) return;
     if (!simulator) {
       createSimulator();
-      return;
     }
 
     intervalId = setInterval(() => {
