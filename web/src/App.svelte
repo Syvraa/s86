@@ -19,7 +19,7 @@
   let editor: Editor;
   let hertz = $state(2);
   let memSize = $state(64);
-  let intervalId = $state(0);
+  let intervalId: number | undefined = $state(undefined);
   let memoryError = $state("");
   let timeoutId: number | undefined = $state(undefined);
 
@@ -71,7 +71,7 @@
 
     intervalId = setInterval(() => {
       stepSimulator(() => {
-        clearInterval(intervalId);
+        stopRun();
       });
     }, 1000 / hertz);
   }
@@ -98,11 +98,18 @@
 
   function reset() {
     simulator = null;
-    if (intervalId) clearInterval(intervalId);
+    stopRun();
     registers.reset();
     setRsp();
     memory.reset();
     editor.reset();
+  }
+
+  function stopRun() {
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = undefined;
+    }
   }
 
   onMount(() => {
@@ -157,16 +164,19 @@
         <input type="number" bind:value={hertz} />
       </label>
       <br />
-      <button
-        onclick={() => {
-          run(hertz);
-        }}>Run</button
-      >
-      <button
-        onclick={() => {
-          if (intervalId) clearInterval(intervalId);
-        }}>Stop</button
-      >
+      {#if intervalId}
+        <button
+          onclick={() => {
+            stopRun();
+          }}>Stop</button
+        >
+      {:else}
+        <button
+          onclick={() => {
+            run(hertz);
+          }}>Run</button
+        >
+      {/if}
       <button onclick={step}>Step</button>
       <button onclick={reset}>Reset</button>
     </div>
