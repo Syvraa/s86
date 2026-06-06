@@ -1,5 +1,3 @@
-use std::num::TryFromIntError;
-
 use crate::operands::operand::OperandConversionError;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -15,18 +13,6 @@ impl From<Imm32> for u64 {
 impl From<Imm32> for Imm64 {
     fn from(value: Imm32) -> Self {
         Imm64(u64::from(value))
-    }
-}
-
-impl TryFrom<i128> for Imm32 {
-    type Error = TryFromIntError;
-
-    fn try_from(value: i128) -> Result<Self, Self::Error> {
-        if value < 0 {
-            Ok(Imm32(i32::try_from(value)?.cast_unsigned()))
-        } else {
-            Ok(Imm32(u32::try_from(value)?))
-        }
     }
 }
 
@@ -62,18 +48,6 @@ impl TryFrom<Imm64> for ! {
 
     fn try_from(_: Imm64) -> Result<Self, Self::Error> {
         Err(OperandConversionError::WrongOperand)
-    }
-}
-
-impl TryFrom<i128> for Imm64 {
-    type Error = TryFromIntError;
-
-    fn try_from(value: i128) -> Result<Self, Self::Error> {
-        if value < 0 {
-            Ok(Imm64(i64::try_from(value)?.cast_unsigned()))
-        } else {
-            Ok(Imm64(u64::try_from(value)?))
-        }
     }
 }
 
