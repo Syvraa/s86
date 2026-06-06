@@ -353,13 +353,11 @@ impl<'a> Parser<'a> {
 
         match tok.ty {
             TokenType::Reg(reg) => OperandParseResult::Ok(Some(Operand::Reg(reg))),
-            TokenType::Byte | TokenType::Word | TokenType::Dword | TokenType::Qword => {
-                OperandParseResult::Ok(Some(Operand::Mem(
-                    match self.parse_memory(Size::try_from(tok.ty.clone()).unwrap()) {
-                        Some(mem) => mem,
-                        None => return OperandParseResult::ParsingError,
-                    },
-                )))
+            TokenType::Size(size) => {
+                OperandParseResult::Ok(Some(Operand::Mem(match self.parse_memory(size) {
+                    Some(mem) => mem,
+                    None => return OperandParseResult::ParsingError,
+                })))
             }
             TokenType::Number(num) => OperandParseResult::Ok(Some(Operand::Imm(Imm64(num)))),
             TokenType::Minus => OperandParseResult::Ok(match self.parse_negative_number() {

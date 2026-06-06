@@ -1,4 +1,4 @@
-use crate::operands::{label::Label, reg::Reg, sizes::QDWB};
+use crate::operands::{label::Label, mem::Size, reg::Reg, sizes::QDWB};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Opcode {
@@ -76,6 +76,7 @@ pub enum TokenType {
     Number(u64),
     Label(Label),
     Sublabel(Label),
+    Size(Size),
     Colon,
     Comma,
     LBracket,
@@ -83,9 +84,5 @@ pub enum TokenType {
     Plus,
     Minus,
     Star,
-    Byte,
-    Word,
-    Dword,
-    Qword,
     Newline,
 }

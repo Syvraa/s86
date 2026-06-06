@@ -1,14 +1,11 @@
 #[cfg(feature = "wasm-bindgen")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{
-    operands::{
-        immediates::{Bits, Imm32},
-        registers::{BaseReg, IndexReg},
-        sizeparams::OpSize,
-        sizes::QDWB,
-    },
-    tokens::TokenType,
+use crate::operands::{
+    immediates::{Bits, Imm32},
+    registers::{BaseReg, IndexReg},
+    sizeparams::OpSize,
+    sizes::QDWB,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,20 +46,6 @@ impl Bits for Size {
             Size::Word => 16,
             Size::Dword => 32,
             Size::Qword => 64,
-        }
-    }
-}
-
-impl TryFrom<TokenType> for Size {
-    type Error = ();
-
-    fn try_from(value: TokenType) -> Result<Self, Self::Error> {
-        match value {
-            TokenType::Byte => Ok(Self::Byte),
-            TokenType::Word => Ok(Self::Word),
-            TokenType::Dword => Ok(Self::Dword),
-            TokenType::Qword => Ok(Self::Qword),
-            _ => Err(()),
         }
     }
 }

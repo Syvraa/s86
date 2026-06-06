@@ -1,6 +1,7 @@
 use phf::phf_map;
 
 use crate::operands::label::Label;
+use crate::operands::mem::Size;
 use crate::operands::reg::Reg;
 use crate::operands::registers::{ByteReg, DwordReg, QwordReg, WordReg};
 use crate::syntax_error::{SyntaxError, SyntaxErrorKind};
@@ -277,10 +278,10 @@ pub static TOKENLOOKUP: phf::Map<&str, TokenType> = phf_map! {
     "r15d" => TokenType::Reg(Reg::Dword(DwordReg::R15d)),
     "r15w" => TokenType::Reg(Reg::Word(WordReg::R15w)),
     "r15b" => TokenType::Reg(Reg::Byte(ByteReg::R15b)),
-    "byte" => TokenType::Byte,
-    "word" => TokenType::Word,
-    "dword" => TokenType::Dword,
-    "qword" => TokenType::Qword,
+    "byte" => TokenType::Size(Size::Byte),
+    "word" => TokenType::Size(Size::Word),
+    "dword" => TokenType::Size(Size::Dword),
+    "qword" => TokenType::Size(Size::Qword),
 };
 
 #[cfg(test)]
