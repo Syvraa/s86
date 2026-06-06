@@ -210,6 +210,7 @@ pub static TOKENLOOKUP: phf::Map<&str, TokenType> = phf_map! {
     "jl" => TokenType::Opcode(Opcode::Jl),
     "jnge" => TokenType::Opcode(Opcode::Jnge),
     "jle" => TokenType::Opcode(Opcode::Jle),
+    "jng" => TokenType::Opcode(Opcode::Jng),
     "rax" => TokenType::Reg(Reg::Qword(QwordReg::Rax)),
     "eax" => TokenType::Reg(Reg::Dword(DwordReg::Eax)),
     "ax" => TokenType::Reg(Reg::Word(WordReg::Ax)),
